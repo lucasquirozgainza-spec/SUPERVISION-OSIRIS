@@ -91,6 +91,58 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
 .lb img{max-width:100%;max-height:100%;object-fit:contain}
 .lb .x{position:absolute;top:calc(env(safe-area-inset-top) + 10px);right:16px;background:rgba(255,255,255,.18);color:#fff}
 .lb .dl{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);background:rgba(255,255,255,.18);color:#fff;text-decoration:none}
+/* ---- v2: navegación inferior, guardias, informe, ajustes ---- */
+[hidden]{display:none !important}
+body{padding-bottom:calc(env(safe-area-inset-bottom) + 70px)}
+body.admin{padding-bottom:0}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;background:var(--card);border-top:1px solid var(--line);
+  padding:4px 4px calc(env(safe-area-inset-bottom) + 4px)}
+.bnav button{flex:1;border:0;background:none;color:var(--mute);font:inherit;font-size:11px;font-weight:600;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.bnav button span{font-size:20px;line-height:1}
+.bnav button.on{color:var(--acc)}
+.vista[hidden]{display:none}
+.h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);margin:16px 2px 8px;font-weight:700}
+.prim{background:var(--acc);color:var(--acc-ink);font-weight:700;padding:12px 14px;border-radius:12px;width:100%}
+.danger{background:var(--bad);color:#fff;font-weight:700}
+.warnb{background:var(--warn);color:#fff;font-weight:700}
+.gcard{cursor:pointer}
+.gtop{display:flex;align-items:flex-start;gap:8px}
+.gname{font-weight:800;font-size:16px;flex:1;min-width:0;overflow-wrap:anywhere}
+.gid{color:var(--mute);font-size:13px;margin-top:1px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.stat{background:var(--chip);border-radius:10px;padding:7px 4px;text-align:center}
+.stat b{display:block;font-size:16px;font-variant-numeric:tabular-nums}
+.stat small{display:block;font-size:10.5px;color:var(--mute);line-height:1.2}
+.pos{color:var(--ok)} .neg{color:var(--bad)}
+.field{display:block;margin:10px 0}
+.field span{display:block;font-size:13px;color:var(--mute);margin-bottom:4px}
+.field input{width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:11px 12px;font:inherit;font-size:16px}
+.field select{width:100%}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:30%}
+.seg button.on{background:var(--acc);color:var(--acc-ink)}
+.chk{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-weight:600}
+.chk:first-child{border-top:0}
+.chk input{width:22px;height:22px;accent-color:var(--acc)}
+.msg{padding:10px 12px;border-radius:10px;background:var(--chip);font-size:14px;margin:10px 0}
+.msg.bad{background:rgba(220,38,38,.12);color:var(--bad)}
+.msg.ok{background:rgba(22,163,74,.12);color:var(--ok)}
+.turno{border-top:1px solid var(--line);padding:9px 0;font-size:14px}
+.turno:first-child{border-top:0}
+.turno .tl{display:flex;gap:8px}
+.turno .tl b{flex:1}
+.turno .mv{font-size:13px;color:var(--mute);margin-top:3px}
+.lnk{border-top:1px solid var(--line);padding:10px 0}
+.lnk:first-child{border-top:0}
+.lnk .u{font-size:12px;color:var(--mute);overflow-wrap:anywhere;margin:3px 0 8px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.acts .btn{flex:1}
+.lock{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.lock .card{width:100%;max-width:360px;text-align:center;padding:22px 16px}
+.lock h2{margin:0 0 6px}
+.lock input{text-align:center;letter-spacing:8px;font-size:24px}
+.periodo#mesSel{max-width:50%}
+.lockedEd{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -102,6 +154,7 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
   </div>
   <div class="row">
     <select id="edif" aria-label="Edificio"><option>Cargando edificios…</option></select>
+    <div class="lockedEd" id="edifFijo" hidden></div>
     <select id="periodo" class="periodo" aria-label="Periodo">
       <option value="hoy">Hoy</option>
       <option value="24">Últimas 24 h</option>
@@ -109,19 +162,34 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
       <option value="7">7 días</option>
       <option value="30">30 días</option>
     </select>
+    <select id="mesSel" class="periodo" aria-label="Mes" hidden></select>
   </div>
   <div class="tabs" id="tabs"></div>
 </header>
 
 <main>
-  <div class="card online" id="online" hidden></div>
-  <div id="list"></div>
+  <section class="vista" id="v-mov">
+    <div class="card online" id="online" hidden></div>
+    <div id="list"></div>
+  </section>
+  <section class="vista" id="v-gua" hidden></section>
+  <section class="vista" id="v-inf" hidden></section>
+  <section class="vista" id="v-cfg" hidden></section>
 </main>
+
+<nav class="bnav" id="bnav" hidden>
+  <button data-v="mov" class="on"><span>◉</span>En vivo</button>
+  <button data-v="gua"><span>☷</span>Guardias</button>
+  <button data-v="inf"><span>⎙</span>Informe</button>
+  <button data-v="cfg"><span>⚙</span>Ajustes</button>
+</nav>
 
 <div class="sheet" id="sheet"><div class="panel" id="panel"></div></div>
 <div class="lb" id="lb"><button class="btn x" id="lbx">Cerrar</button><img id="lbimg" alt=""><a class="btn dl" id="lbdl" target="_blank" rel="noopener">Abrir original</a></div>
+<div class="lock" id="lock" hidden><div class="card" id="lockBox"></div></div>
 
 <script>
+"use strict";
 const SB_URL = 'https://idwsbukgtogiwvfrurlc.supabase.co';
 const SB_KEY = 'sb_publishable_-uuIV9H6rYYWjhyGNNtQww_0oww_OyF';
 const REFRESCO_MS = 30000;
@@ -134,12 +202,13 @@ const SECCIONES = [
   {k:'salidas',  t:'Salidas',     tipos:['Salida de turno']},
   {k:'rondas',   t:'Rondas',      tipos:['Ronda']},
   {k:'noved',    t:'Novedades',   tipos:['Incidente','Advertencia','Guardia sin uniforme']},
-  {k:'visitas',  t:'Visitas',     tipos:['Visita']},
-  {k:'encom',    t:'Encomiendas', tipos:['Encomienda']},
-  {k:'hosp',     t:'Hospedajes',  tipos:['Hospedaje']},
+  {k:'visitas',  t:'Visitas',     tipos:['Visita','Salida de visita']},
+  {k:'encom',    t:'Encomiendas', tipos:['Encomienda','Entrega de encomienda']},
+  {k:'hosp',     t:'Hospedajes',  tipos:['Hospedaje','Salida de hospedaje']},
 ];
 const OPERATIVOS = ['Ingreso de turno','Salida de turno','Doblar turno','Visita','Ronda','Incidente',
-  'Encomienda','Hospedaje','Advertencia','Guardia sin uniforme'];
+  'Encomienda','Hospedaje','Advertencia','Guardia sin uniforme',
+  'Salida de visita','Entrega de encomienda','Salida de hospedaje'];
 const ESTILO = {
   'Ingreso de turno':     {c:'var(--ok)',     i:'⏵', t:'Ingreso de turno'},
   'Doblar turno':         {c:'var(--violet)', i:'⇆', t:'Dobla turno'},
@@ -151,20 +220,26 @@ const ESTILO = {
   'Visita':               {c:'var(--acc)',    i:'☺', t:'Visita'},
   'Encomienda':           {c:'#a16207',       i:'▣', t:'Encomienda'},
   'Hospedaje':            {c:'#0d9488',       i:'⌂', t:'Hospedaje'},
+  'Salida de visita':     {c:'#64748b',       i:'☺', t:'Salida de visita'},
+  'Entrega de encomienda':{c:'#a16207',       i:'✓', t:'Encomienda entregada'},
+  'Salida de hospedaje':  {c:'#0d9488',       i:'⌂', t:'Salida de hospedaje'},
 };
 /* Campos internos que no se muestran */
 const OCULTOS = new Set(['uid','ts','guard_ci','guard_id','guard_uuid','turno_ref','device_id','foto_url','fotos_url',
-  'foto','fotos','foto_local','fotos_local','building_id','unit_id','id','edificio','guardia','eliminado','version','app']);
+  'foto','foto_local','fotos_local','building_id','unit_id','id','edificio','guardia','eliminado','version','app','ref','cargo','relevos']);
 const ETIQUETAS = {
   bloque:'Bloque', torre:'Torre', observaciones:'Observaciones', ubicacion:'Ubicación', nivel:'Nivel',
   nombre:'Nombre', depto:'Depto.', departamento:'Departamento', tipo:'Tipo', motivo:'Motivo', ci:'CI',
   placa:'Placa', vehiculo:'Vehículo', empresa:'Empresa', destinatario:'Destinatario', remitente:'Remitente',
-  descripcion:'Descripción', punto:'Punto', relevos:'Relevo de', turno:'Turno', personas:'Personas',
+  descripcion:'Descripción', punto:'Punto', turno:'Turno', personas:'Personas',
   desde:'Desde', hasta:'Hasta', noches:'Noches', estado:'Estado', recibe:'Recibe', entregado:'Entregado',
   telefono:'Teléfono', autoriza:'Autoriza', salida:'Salida', ingreso:'Ingreso', lat:'Latitud', lng:'Longitud',
+  tarjeta:'Tarjeta N°', tarjeta_devuelta:'Devolvió la tarjeta', huesped:'Huésped', documento:'Documento',
+  plataforma:'Plataforma', huespedes:'Huéspedes', lugar:'Lugar', puntos:'Puntos de control', fotos:'Fotos',
+  dias:'Días', cantidad:'Personas', mensaje:'Mensaje',
 };
 /* Orden de preferencia para la línea de resumen */
-const RESUMEN = ['observaciones','descripcion','motivo','nombre','destinatario','ubicacion','punto','depto','placa','nivel'];
+const RESUMEN = ['observaciones','descripcion','motivo','nombre','huesped','destinatario','ubicacion','punto','depto','placa','nivel'];
 
 const $ = s => document.querySelector(s);
 const st = {edif:null, sec:'todo', periodo:'hoy', datos:[], conteos:{}, hayMas:false, timer:null, cargando:false};
@@ -178,6 +253,29 @@ async function api(path){
   return r.json();
 }
 const enc = encodeURIComponent;
+async function apiEscribir(metodo, path, body){
+  const h = {apikey:SB_KEY, Accept:'application/json'};
+  if(body !== undefined){ h['Content-Type'] = 'application/json'; h['Prefer'] = 'return=minimal'; }
+  const r = await fetch(SB_URL + '/rest/v1/' + path, {method:metodo, headers:h, body: body === undefined ? undefined : JSON.stringify(body)});
+  if(!r.ok){ let t = ''; try{ t = await r.text(); }catch(_){}; throw new Error('HTTP ' + r.status + (t ? ': ' + t.slice(0,140) : '')); }
+  return true;
+}
+/* Lee TODAS las filas (el servidor entrega máx. 1000 por pedido) */
+async function paginas(path){
+  const out = [];
+  for(let off = 0; off < 50000; off += 1000){
+    const pg = await api(path + '&limit=1000&offset=' + off);
+    out.push(...pg);
+    if(pg.length < 1000) break;
+  }
+  return out;
+}
+/* Evento nuevo, con el mismo formato que la app (uid + hora real) */
+function nuevoEvento(tipo, edificio, guardia, detalle){
+  const uid = 'monitor_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  return {tipo, edificio, guardia, device_id:'monitor-web', detalle:{...detalle, uid, ts:new Date().toISOString()}};
+}
+const ED_OCULTOS = new Set(['*','__monitor__']);
 const inList = arr => 'in.(' + arr.map(t => '"' + t.replace(/"/g,'\\"') + '"').join(',') + ')';
 
 function fecha(v){
@@ -229,7 +327,7 @@ function enRango(e){
 
 async function cargarEdificios(){
   const rows = await api('eventos?select=edificio&order=created_at.desc&limit=2000');
-  const set = [...new Set(rows.map(r => r.edificio || '').filter(e => e.trim()))].sort((a,b)=>a.localeCompare(b,'es'));
+  const set = [...new Set(rows.map(r => r.edificio || '').filter(e => e.trim() && !ED_OCULTOS.has(e)))].sort((a,b)=>a.localeCompare(b,'es'));
   const sel = $('#edif');
   sel.innerHTML = set.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('') || '<option value="">Sin edificios</option>';
   const pedido = new URLSearchParams(location.search).get('e');
@@ -267,6 +365,14 @@ async function cargarEventos(limite){
           datos: rows.filter(enRango).sort((a,b) => horaReal(b) - horaReal(a))};
 }
 
+async function cargarTurnos(){
+  try{
+    const desde = new Date(Date.now() - 40*36e5).toISOString();
+    return await api('eventos?select=guardia,tipo,created_at,ts:detalle->>ts,ci:detalle->>guard_ci,bloque:detalle->>bloque'
+      + '&edificio=eq.' + enc(st.edif) + '&created_at=gte.' + enc(desde)
+      + '&tipo=' + enc(inList(['Ingreso de turno','Doblar turno','Salida de turno'])) + '&order=created_at.desc&limit=300');
+  }catch(e){ return null; }
+}
 async function cargarPresencia(){
   try{
     return await api('presencia?select=guardia,edificio,en_turno,last_seen&edificio=eq.' + enc(st.edif) + '&order=last_seen.desc&limit=30');
@@ -281,10 +387,10 @@ async function refrescar(manual){
   if(manual) $('#refresh').textContent = '…';
   try{
     const edif = st.edif, sec = st.sec;
-    const [ev, cont, pres] = await Promise.all([cargarEventos(limite), cargarConteos(), cargarPresencia()]);
+    const [ev, cont, pres, tur] = await Promise.all([cargarEventos(limite), cargarConteos(), cargarPresencia(), cargarTurnos()]);
     if(mio !== gen || edif !== st.edif || sec !== st.sec) return;
     st.datos = ev.datos; st.hayMas = ev.hayMas; st.conteos = cont;
-    pintarPresencia(pres); pintarTabs(); pintarLista();
+    pintarPresencia(pres, tur); pintarTabs(); pintarLista();
     $('#dot').classList.remove('off'); $('#liveTxt').textContent = 'En vivo';
     $('#upd').textContent = st.edif + ' · actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   }catch(e){
@@ -333,6 +439,14 @@ function camposVisibles(d){
   return Object.entries(d).filter(([k,v]) => !OCULTOS.has(k) && !k.startsWith('_') && valorTxt(v) !== '');
 }
 function resumen(e, d){
+  if(e.tipo === 'Visita' || e.tipo === 'Salida de visita'){
+    const p = [d.nombre, d.ci ? 'CI ' + d.ci : '', d.depto ? '→ depto ' + d.depto : '',
+      d.tarjeta ? 'tarjeta ' + d.tarjeta : '', d.tarjeta_devuelta === true ? 'DEVOLVIÓ tarjeta' : (d.tarjeta_devuelta === false ? 'NO devolvió tarjeta' : '')];
+    return p.filter(Boolean).join(' · ');
+  }
+  if(e.tipo === 'Encomienda' || e.tipo === 'Entrega de encomienda')
+    return [d.depto ? 'Depto ' + d.depto : '', d.destinatario, d.empresa].filter(Boolean).join(' · ');
+  if(e.tipo === 'Incidente') return [d.tipo, d.lugar, d.descripcion].filter(Boolean).join(' · ');
   for(const k of RESUMEN) if(d[k] && !OCULTOS.has(k)) return valorTxt(d[k]);
   const c = camposVisibles(d).filter(([k]) => !['bloque','torre','relevos','nivel'].includes(k));
   return c.length ? c.slice(0,2).map(([k,v]) => (ETIQUETAS[k]||k) + ': ' + valorTxt(v)).join(' · ') : '';
@@ -341,7 +455,6 @@ function subtitulo(e, d){
   const p = [];
   if(e.guardia) p.push(e.guardia);
   const b = d.bloque || d.torre; if(b) p.push(valorTxt(b));
-  if(e.tipo === 'Ingreso de turno' && d.relevos) p.push('releva a ' + valorTxt(d.relevos));
   if(d.nivel) p.push('Nivel ' + valorTxt(d.nivel));
   return p.join(' · ');
 }
@@ -350,17 +463,38 @@ function pintarTabs(){
   $('#tabs').innerHTML = SECCIONES.map(s =>
     `<button class="tab${s.k===st.sec?' on':''}" data-k="${s.k}">${s.t}<b>${st.conteos[s.k] ?? ''}</b></button>`).join('');
 }
-function pintarPresencia(rows){
+function pintarPresencia(rows, turnos){
   const box = $('#online');
-  const vivos = rows.filter(r => r.en_turno !== false && r.last_seen && (Date.now() - fecha(r.last_seen)) < 15*60e3);
-  if(!rows.length){ box.hidden = true; return; }
+  if(!turnos){ box.hidden = true; return; }
+  /* Quién está de turno: último movimiento de cada guardia (por CI o nombre) en las últimas 40 h */
+  const ult = new Map();
+  for(const x of turnos){
+    const k = (x.ci || (x.guardia||'').trim().toLowerCase()); if(!k) continue;
+    let t = fecha(x.ts); if(isNaN(t)) t = fecha(x.created_at);
+    const p = ult.get(k);
+    if(!p || t > p.t) ult.set(k, {t, tipo:x.tipo, guardia:x.guardia, bloque:x.bloque});
+  }
+  const enTurno = [...ult.values()]
+    .filter(u => u.tipo !== 'Salida de turno' && (Date.now() - u.t) < 37*36e5)
+    .sort((a,b) => a.t - b.t);
+  const senal = n => {
+    const r = (rows||[]).find(r => (r.guardia||'').trim().toLowerCase() === (n||'').trim().toLowerCase());
+    return r && r.last_seen ? fecha(r.last_seen) : null;
+  };
   box.hidden = false;
-  const lista = (vivos.length ? vivos : rows.slice(0,3)).map(r => {
-    const t = fecha(r.last_seen), on = vivos.includes(r);
-    return `<div class="pres"><span class="badge" style="background:${on?'var(--ok)':'#94a3b8'}">${on?'EN LÍNEA':'SIN SEÑAL'}</span>
-      <span class="n">${esc(r.guardia || 'Celular sin guardia')}</span><span class="t">${r.last_seen ? hace(t) : ''}</span></div>`;
+  if(!enTurno.length){
+    box.innerHTML = '<h3>De turno ahora</h3><div class="pres"><span class="n" style="font-weight:500;color:var(--mute)">Nadie tiene un ingreso de turno abierto.</span></div>';
+    return;
+  }
+  box.innerHTML = '<h3>De turno ahora</h3>' + enTurno.map(u => {
+    const s = senal(u.guardia);
+    const vivo = s && (Date.now() - s) < 10*60e3;
+    const tag = vivo ? '<span class="badge" style="background:var(--ok)">APP ABIERTA</span>' : '';
+    const sub = 'desde ' + hm(u.t) + (diaTxt(u.t) !== 'Hoy' ? ' (' + diaTxt(u.t).toLowerCase() + ')' : '')
+      + (u.bloque ? ' · ' + esc(u.bloque) : '')
+      + (s && !vivo ? ' · app usada ' + hace(s) : '');
+    return `<div class="pres"><span class="n">${esc(u.guardia || 'Guardia')}<span class="t" style="display:block;font-weight:400">${sub}</span></span>${tag}</div>`;
   }).join('');
-  box.innerHTML = `<h3>${vivos.length ? 'Guardias en línea ahora' : 'Última señal de los celulares'}</h3>${lista}`;
 }
 function pintarLista(){
   const L = $('#list');
@@ -418,12 +552,13 @@ $('#edif').addEventListener('change', e => {
   st.edif = e.target.value; guardar('edif', st.edif); limite = PAGINA; st.datos = [];
   const u = new URL(location.href); u.searchParams.set('e', st.edif); history.replaceState(null, '', u);
   $('#list').innerHTML = '<div class="empty">Cargando…</div>'; refrescar();
+  if(typeof alCambiarEdificio === 'function') alCambiarEdificio();
 });
 $('#periodo').addEventListener('change', e => {
   st.periodo = e.target.value; guardar('periodo', st.periodo); limite = PAGINA; st.datos = [];
   $('#list').innerHTML = '<div class="empty">Cargando…</div>'; refrescar();
 });
-$('#refresh').addEventListener('click', () => refrescar(true));
+$('#refresh').addEventListener('click', () => { if(typeof refrescarVista === 'function') refrescarVista(); else refrescar(true); });
 $('#list').addEventListener('click', ev => {
   if(ev.target.id === 'mas'){ limite += PAGINA; refrescar(true); return; }
   if(ev.target.tagName === 'IMG'){ ev.stopPropagation(); verFoto(ev.target.src); return; }
@@ -434,23 +569,1051 @@ $('#sheet').addEventListener('click', ev => {
   else if(ev.target.dataset.src) verFoto(ev.target.dataset.src);
 });
 $('#lb').addEventListener('click', ev => { if(ev.target.id !== 'lbdl') $('#lb').classList.remove('on'); });
-document.addEventListener('visibilitychange', () => { if(!document.hidden) refrescar(); });
+document.addEventListener('visibilitychange', () => { if(!document.hidden && vistaActual === 'mov') refrescar(); });
+let vistaActual = 'mov';
+
+
+/* ===== Cálculo de horas: copia FIEL de turnos.dart + panel_horas.dart (app v12.x) =====
+   Mismas reglas que la app: relevos, tolerancia (minutos completos pasado el margen),
+   mes por la hora PROGRAMADA de inicio (diurno del día 1 al nocturno del último día). */
+const Turnos = {
+  niveles: [12, 24, 36],
+  tolDef: 15,
+  porDefecto: ['08:00', '20:00'],
+  toleranciaDe(mod){
+    const v = mod ? mod.tolerancia_min : undefined;
+    const n = intDart(v);
+    if (n === null) return this.tolDef;
+    return n < 0 ? 0 : (n > 60 ? 60 : n);
+  },
+  parseHora(s){
+    if (s == null) return null;
+    const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(s));
+    if (!m) return null;
+    const h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return [h, mi];
+  },
+  fmtHora(h, m){ return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'); },
+  limpiar(hs){
+    const out = [];
+    for (const h of hs) { const p = this.parseHora(h); if (!p) continue; const f = this.fmtHora(p[0], p[1]); if (!out.includes(f)) out.push(f); }
+    return out;
+  },
+  relevoCercano(t, hs){
+    let mejor = null;
+    for (const h of this.limpiar(hs)) {
+      const p = this.parseHora(h);
+      for (let d = -1; d <= 1; d++) {
+        const c = new Date(t.getFullYear(), t.getMonth(), t.getDate() + d, p[0], p[1]);
+        const diff = Math.abs(minEntre(t, c));
+        if (diff <= 360 && (mejor === null || diff < Math.abs(minEntre(t, mejor)))) mejor = c;
+      }
+    }
+    return mejor;
+  },
+  nivelPorHoras(h){
+    let best = this.niveles[0];
+    for (const n of this.niveles) if (Math.abs(h - n) < Math.abs(h - best)) best = n;
+    return best;
+  },
+  nivelValido(v){
+    const n = intDart(v);
+    return (n !== null && this.niveles.includes(n)) ? n : null;
+  },
+  inicioProgramado(t, hs){ return this.relevoCercano(t, hs) || t; },
+  dobles(n){ return n >= 36 ? 2 : (n >= 24 ? 1 : 0); },
+  duracion(min){
+    const m = Math.abs(min), h = Math.trunc(m / 60), r = m % 60;
+    if (h === 0) return r + ' min';
+    return r === 0 ? h + ' h' : h + ' h ' + String(r).padStart(2, '0') + ' min';
+  },
+  saldo(horas){
+    const m = Math.round(horas * 60);
+    if (m === 0) return '0 h';
+    return (m > 0 ? '+' : '-') + this.duracion(Math.abs(m));
+  },
+};
+/* v is int ? v : int.tryParse('$v') de Dart */
+function intDart(v){
+  if (typeof v === 'number') return Number.isInteger(v) ? v : null;
+  const s = String(v ?? '').trim();
+  return /^[+-]?\d+$/.test(s) ? parseInt(s, 10) : null;
+}
+/* Dart Duration.inMinutes: trunca hacia cero */
+function minEntre(a, b){ return Math.trunc((a - b) / 60000); }
+function addHoras(t, h){ return new Date(t.getTime() + h * 3600000); }
+
+class RegistroTurno {
+  constructor(o){
+    this.id = o.id; this.edificio = o.edificio || ''; this.guardia = o.guardia; this.guardId = o.guardId || null;
+    this.puesto = o.puesto; this.inicio = o.inicio; this.fin = o.fin || null; this.nivelDeclarado = o.nivelDeclarado ?? null;
+    this.relevos = o.relevos || []; this.refIngreso = o.refIngreso || null; this.refSalida = o.refSalida || null;
+    this.notas = []; this.corregido = false; this.marca = null;
+    this._reiniciar();
+  }
+  get clave(){ return this.guardId ?? this.guardia; }
+  get estado(){ return this.marca ?? (this.fin === null ? 'abierto' : 'ok'); }
+  get valido(){ return this.estado === 'ok' || this.estado === 'abierto'; }
+  get cerrado(){ return this.estado === 'ok'; }
+  get horas(){ return !this.cerrado ? 0 : minEntre(this.fin, this.inicio) / 60; }
+  get nivel(){ return Turnos.nivelValido(this.nivelDeclarado) ?? (this.cerrado ? Turnos.nivelPorHoras(this.horas) : 12); }
+  get aFavor(){ return this.movimientos.reduce((a, m) => m.horas > 0 ? a + m.horas : a, 0); }
+  get enContra(){ return this.movimientos.reduce((a, m) => m.horas < 0 ? a - m.horas : a, 0); }
+  get saldo(){ return this.aFavor - this.enContra; }
+  get llegoTarde(){ return this.movimientos.some(m => m.horas < 0 && m.motivo.startsWith('Llegó tarde')); }
+  _reiniciar(){ this.horariosUsados = []; this.progInicio = null; this.progFin = null; this.relevadoPor = null; this.releveA = null; this.movimientos = []; }
+}
+
+class ResumenGuardia {
+  constructor(guardia, clave){ this.guardia = guardia; this.clave = clave ?? guardia; this.turnos = []; }
+  get _validos(){ return this.turnos.filter(t => t.valido); }
+  get _cerrados(){ return this.turnos.filter(t => t.cerrado); }
+  get dias(){ return new Set(this._validos.map(t => t.inicio.getFullYear() + '-' + (t.inicio.getMonth()+1) + '-' + t.inicio.getDate())).size; }
+  get n12(){ return this._cerrados.filter(t => t.nivel === 12).length; }
+  get n24(){ return this._cerrados.filter(t => t.nivel === 24).length; }
+  get n36(){ return this._cerrados.filter(t => t.nivel === 36).length; }
+  get horas(){ return this._cerrados.reduce((a, t) => a + t.horas, 0); }
+  get aFavor(){ return this._validos.reduce((a, t) => a + t.aFavor, 0); }
+  get enContra(){ return this._validos.reduce((a, t) => a + t.enContra, 0); }
+  get saldo(){ return this.aFavor - this.enContra; }
+  get vecesTarde(){ return this._validos.filter(t => t.llegoTarde).length; }
+  get incompletos(){ return this.turnos.filter(t => !t.valido).length; }
+}
+
+const PanelHoras = {
+  calcular(todos, {desde = null, hasta = null, toleranciaMin = Turnos.tolDef} = {}){
+    const tol = toleranciaMin / 60;
+    const enPeriodo = t => { const ref = t.progInicio ?? t.inicio; return (!desde || !(ref < desde)) && (!hasta || ref < hasta); };
+    const vistos = new Set(), porPuesto = new Map();
+    for (const t of todos) {
+      if (vistos.has(t.id)) continue; vistos.add(t.id);
+      t._reiniciar();
+      if (!porPuesto.has(t.puesto)) porPuesto.set(t.puesto, []);
+      porPuesto.get(t.puesto).push(t);
+    }
+    const out = [];
+    for (const puesto of [...porPuesto.keys()].sort(cmpStr)) {
+      const lista = porPuesto.get(puesto).sort(this._orden);
+      this._calcularPuesto(lista, tol);
+      const p = {puesto, toleranciaMin, guardias: new Map(), turnos: []};
+      for (const t of lista) {
+        if (!enPeriodo(t)) continue;
+        p.turnos.push(t);
+        if (!p.guardias.has(t.clave)) p.guardias.set(t.clave, new ResumenGuardia(t.guardia, t.clave));
+        p.guardias.get(t.clave).turnos.push(t);
+      }
+      if (p.turnos.length) out.push(p);
+    }
+    return out;
+  },
+  _orden(a, b){
+    const c = a.inicio - b.inicio; if (c !== 0) return c < 0 ? -1 : 1;
+    const g = cmpStr(a.guardia, b.guardia); return g !== 0 ? g : cmpStr(a.id, b.id);
+  },
+  _h(a, b){ return minEntre(a, b) / 60; },
+  _calcularPuesto(lista, tol){
+    let ultimo = null, primero = null;
+    for (const t of lista) if (t.relevos.length) { primero = t.relevos; break; }
+    for (const t of lista) {
+      if (t.relevos.length) ultimo = t.relevos;
+      t.horariosUsados = t.relevos.length ? t.relevos : (ultimo ?? primero ?? Turnos.porDefecto);
+    }
+    const validos = lista.filter(t => t.valido);
+    for (const t of validos) {
+      t.progInicio = Turnos.inicioProgramado(t.inicio, t.horariosUsados);
+      t.progFin = addHoras(t.progInicio, t.nivel);
+    }
+    const tomados = new Set();
+    for (const a of validos) {
+      if (!a.cerrado) continue;
+      let mejor = null, mejorDif = 1 << 30;
+      for (const b of validos) {
+        if (a === b || b.clave === a.clave || tomados.has(b)) continue;
+        if (b.progInicio.getTime() !== a.progFin.getTime()) continue;
+        const dif = Math.abs(minEntre(b.inicio, a.fin));
+        if (dif < mejorDif || (dif === mejorDif && mejor !== null && cmpStr(b.id, mejor.id) < 0)) { mejor = b; mejorDif = dif; }
+      }
+      if (mejor) {
+        tomados.add(mejor); a.relevadoPor = mejor.guardia; mejor.releveA = a.guardia;
+        this._relevo(a, mejor, a.progFin, tol);
+      } else this._finSinRelevo(a, tol);
+    }
+    for (const b of validos) if (!tomados.has(b)) this._inicioSinRelevo(b, tol);
+  },
+  _relevo(a, b, p, tol){
+    const entra = b.inicio, sale = a.fin;
+    if (entra > p) {
+      const tarde = this._h(entra, p);
+      if (tarde > tol) b.movimientos.push({programado: p, real: entra, horas: -tarde, motivo: 'Llegó tarde al relevo', con: a.guardia});
+      const espero = this._h(sale < entra ? sale : entra, p);
+      if (espero > tol) a.movimientos.push({programado: p, real: sale, horas: espero, motivo: 'Esperó a su relevo', con: b.guardia});
+    }
+    if (sale < p) {
+      const antes = this._h(p, sale);
+      if (antes > tol) a.movimientos.push({programado: p, real: sale, horas: -antes, motivo: 'Salió antes del relevo', con: b.guardia});
+      const cubrio = this._h(p, entra > sale ? entra : sale);
+      if (cubrio > tol) b.movimientos.push({programado: p, real: entra, horas: cubrio, motivo: 'Entró antes y lo cubrió', con: a.guardia});
+    }
+  },
+  _finSinRelevo(a, tol){
+    const d = this._h(a.fin, a.progFin);
+    if (d > tol) a.movimientos.push({programado: a.progFin, real: a.fin, horas: d, motivo: 'Se quedó después de su hora (sin relevo registrado)'});
+    else if (d < -tol) a.movimientos.push({programado: a.progFin, real: a.fin, horas: d, motivo: 'Salió antes de su hora (sin relevo registrado)'});
+  },
+  _inicioSinRelevo(b, tol){
+    const tarde = this._h(b.inicio, b.progInicio);
+    if (tarde > tol) b.movimientos.push({programado: b.progInicio, real: b.inicio, horas: -tarde, motivo: 'Llegó tarde (sin relevo registrado)'});
+  },
+  /* Panel del mes (año, mes 0-11) de UN edificio desde los eventos de la nube */
+  panelMes(eventos, anio, mes, {toleranciaMin = Turnos.tolDef, soloConGuardia = false, ahora} = {}){
+    const regs = this.desdeEventos(eventos, {soloConGuardia, ahora});
+    return this.calcular(regs, {desde: new Date(anio, mes, 1), hasta: new Date(anio, mes + 1, 1), toleranciaMin});
+  },
+  porGuardia(puestos){
+    const out = new Map();
+    for (const p of puestos) for (const r of p.guardias.values()) {
+      if (!out.has(r.clave)) out.set(r.clave, new ResumenGuardia(r.guardia, r.clave));
+      out.get(r.clave).turnos.push(...r.turnos);
+    }
+    for (const r of out.values()) r.turnos.sort(this._orden);
+    return out;
+  },
+  _ordenTipo(t){ return t === 'Ingreso de turno' ? 0 : t === 'Doblar turno' ? 1 : t === 'Salida de turno' ? 2 : 3; },
+  desdeEventos(eventos, {ahora, soloConGuardia = false} = {}){
+    const now = ahora || new Date();
+    const evs = [], vistos = new Set();
+    for (const e of eventos) {
+      const ev = evDe(e); if (!ev) continue;
+      if (soloConGuardia && ev.guardId === null) continue;
+      if (vistos.has(ev.uid)) continue; vistos.add(ev.uid);
+      evs.push(ev);
+    }
+    evs.sort((a, b) => {
+      const c = a.t - b.t; if (c !== 0) return c < 0 ? -1 : 1;
+      const o = this._ordenTipo(a.tipo) - this._ordenTipo(b.tipo); return o !== 0 ? o : cmpStr(a.uid, b.uid);
+    });
+    const porRef = new Map(), abierto = new Map(), correcciones = new Map();
+    const fh = t => String(t.getDate()).padStart(2,'0') + '/' + String(t.getMonth()+1).padStart(2,'0') + ' ' + Turnos.fmtHora(t.getHours(), t.getMinutes());
+    for (const ev of evs) {
+      const k = ev.guardId ?? (ev.ed + '|' + ev.g);
+      const ref = ev.det.turno_ref != null ? String(ev.det.turno_ref) : null;
+      if (ev.tipo === 'Ingreso de turno') {
+        const id = ref ?? ('nube:' + ev.uid);
+        if (porRef.has(id)) continue;
+        const prev = abierto.get(k);
+        if (prev && prev.fin === null && prev.marca === null) {
+          prev.marca = 'sin salida'; prev.notas.push('No marcó salida (volvió a marcar ingreso el ' + fh(ev.t) + ')');
+        }
+        const t = new RegistroTurno({id, edificio: ev.ed, guardia: ev.g, guardId: ev.guardId, puesto: ev.puesto, inicio: ev.t,
+          relevos: Turnos.limpiar(String(ev.det.relevos ?? '').split(',')), refIngreso: ev.ref});
+        porRef.set(id, t); abierto.set(k, t);
+      } else if (ev.tipo === 'Salida de turno' || ev.tipo === 'Doblar turno') {
+        let t = ref !== null ? (porRef.get(ref) || null) : null;
+        if (!t) { const c = abierto.get(k); if (c && c.fin === null && (ref === null || c.id.startsWith('nube:'))) t = c; }
+        const nivel = Turnos.nivelValido(ev.det.nivel);
+        if (ev.tipo === 'Doblar turno') { if (t && nivel !== null) t.nivelDeclarado = nivel; continue; }
+        if (!t) {
+          const h = new RegistroTurno({id: 'salida:' + ev.uid, edificio: ev.ed, guardia: ev.g, guardId: ev.guardId, puesto: ev.puesto,
+            inicio: ev.t, fin: ev.t, nivelDeclarado: nivel, refSalida: ev.ref});
+          h.marca = 'sin ingreso'; h.notas.push('Salida ' + fh(ev.t) + ' sin ingreso registrado');
+          porRef.set(h.id, h); continue;
+        }
+        if (t.fin !== null) { t.notas.push('Salida repetida ' + fh(ev.t) + ' ignorada'); continue; }
+        t.fin = ev.t; t.refSalida = ev.ref;
+        if (nivel !== null) t.nivelDeclarado = nivel;
+        if (abierto.get(k) === t) abierto.delete(k);
+      } else if (ev.tipo === 'Corrección de turno') {
+        if (ref !== null) correcciones.set(ref, ev);
+      }
+    }
+    for (const [key, c] of correcciones) {
+      const t = porRef.get(key); if (!t) continue;
+      const d = c.det;
+      if (d.anular === true) t.marca = 'anulado';
+      else {
+        const ini = parseDart(d.inicio), fin = parseDart(d.fin);
+        if (ini) t.inicio = ini;
+        if (fin) t.fin = fin;
+        const nv = Turnos.nivelValido(d.nivel); if (nv !== null) t.nivelDeclarado = nv;
+        if (t.marca === 'sin salida' || t.marca === 'sin ingreso') t.marca = null;
+      }
+      t.corregido = true;
+      const motivo = String(d.motivo ?? '').trim();
+      t.notas.push('Corregido ' + fh(c.t) + ' por ' + c.g + (motivo ? ': ' + motivo : ''));
+    }
+    for (const t of porRef.values()) this._validar(t, now);
+    return [...porRef.values()];
+  },
+  _validar(t, now){
+    if (t.marca !== null) return;
+    if (t.fin !== null) {
+      const m = minEntre(t.fin, t.inicio);
+      if (m <= 0 || m > 3600) { t.marca = 'inconsistente'; t.notas.push('Salida antes del ingreso o turno de más de 60 h: no se calcula'); }
+    } else if (Math.trunc((now - t.inicio) / 3600000) > t.nivel + 12) {
+      t.marca = 'sin salida'; t.notas.push('No se registró la salida');
+    }
+  },
+};
+
+/* Comparación de textos como Dart String.compareTo (por unidades de código) */
+function cmpStr(a, b){ a = String(a); b = String(b); return a < b ? -1 : (a > b ? 1 : 0); }
+/* DateTime.tryParse(...)?.toLocal() de Dart: sin zona = hora LOCAL */
+function parseDart(v){
+  if (v === null || v === undefined) return null;
+  let s = String(v).trim(); if (!s) return null;
+  s = s.replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1');
+  s = s.replace(/([+-]\d{2})(\d{2})$/, '$1:$2').replace(/([+-]\d{2})$/, '$1:00');
+  let d;
+  if (/(Z|[+-]\d{2}:\d{2})$/i.test(s)) d = new Date(s);
+  else {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/.exec(s);
+    if (!m) return null;
+    d = new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0), +((m[7]||'0').padEnd(3,'0')));
+  }
+  return isNaN(d) ? null : d;
+}
+function evDe(e){
+  const tipos = ['Ingreso de turno', 'Salida de turno', 'Doblar turno', 'Corrección de turno'];
+  const tipo = String(e.tipo ?? ''); if (!tipos.includes(tipo)) return null;
+  let d = e.detalle; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { d = null; } }
+  const det = (d && typeof d === 'object') ? d : {};
+  const t = parseDart(det.ts ?? e.created_at ?? ''); if (!t) return null;
+  const ed = String(e.edificio ?? 'Sin edificio');
+  const g = String(e.guardia ?? 'Sin nombre');
+  const puesto = String(e.unit_id ?? e.device_id ?? 'sin-celular');
+  const gidRaw = det.guard_ci ?? e.guard_id;
+  const gid = (gidRaw === null || gidRaw === undefined) ? null : String(gidRaw);
+  const idNube = e.id;
+  const uid = det.uid != null ? String(det.uid)
+    : (idNube != null ? 'id' + idNube : tipo + '|' + ed + '|' + g + '|' + puesto + '|' + t.toISOString().substring(0, 16));
+  const ref = idNube != null ? 'nube #' + idNube : uid;
+  return {tipo, ed, g, puesto, t, det, uid, ref, guardId: (gid === null || gid === '') ? null : gid};
+}
+
+
+/* ===================== GUARDIAS (solo supervisión) ===================== */
+const GU = {datos:null, verBajas:false, gen:0};
+const TURNO_TXT = {DIURNO:'Diurno', NOCTURNO:'Nocturno', FRANQUERO:'Franquero'};
+const limpiarCi = ci => String(ci ?? '').trim().replace(/\s+/g, '').toUpperCase();
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+function mesActual(){ const v = $('#mesSel').value || ''; const m = /^(\d{4})-(\d{2})$/.exec(v); const d = new Date(); return m ? {y:+m[1], m:+m[2]-1} : {y:d.getFullYear(), m:d.getMonth()}; }
+function mesTxt(o){ return MESES[o.m].charAt(0).toUpperCase() + MESES[o.m].slice(1) + ' ' + o.y; }
+function llenarMeses(){
+  const sel = $('#mesSel'), d = new Date(); let html = '';
+  for(let i = 0; i < 13; i++){
+    const x = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    const v = x.getFullYear() + '-' + String(x.getMonth()+1).padStart(2,'0');
+    html += `<option value="${v}">${mesTxt({y:x.getFullYear(), m:x.getMonth()})}</option>`;
+  }
+  sel.innerHTML = html;
+}
+
+/* Configuración del edificio (la última publicada por la app): bloques y tolerancia */
+async function leerConfig(ed){
+  const r = await api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + enc(ed) + '&order=created_at.desc&limit=1');
+  let mod = {};
+  if(r.length){
+    let m = detalleDe(r[0]).modulos;
+    if(typeof m === 'string'){ try{ m = JSON.parse(m); }catch(_){ m = {}; } }
+    if(m && typeof m === 'object') mod = m;
+  }
+  const torres = Array.isArray(mod.torres) ? mod.torres.map(x => String(x).trim()).filter(Boolean) : [];
+  return {torres, tolerancia: Turnos.toleranciaDe(mod)};
+}
+
+/* Registro de guardias del edificio: el último alta/baja de cada CI manda (igual que la app) */
+async function leerRegistro(ed){
+  const rows = await api('eventos?select=*&edificio=eq.' + enc(ed) + '&tipo=in.(Guardia,GuardiaBaja)&order=created_at.desc&limit=1000');
+  const porCi = new Map();
+  for(const e of rows){
+    const d = detalleDe(e); const ci = limpiarCi(d.ci); if(!ci) continue;
+    const t = horaReal(e);
+    const p = porCi.get(ci);
+    if(!p || t > p.t) porCi.set(ci, {t, e, d});
+  }
+  const out = new Map();
+  for(const [ci, x] of porCi){
+    const alta = x.e.tipo === 'Guardia';
+    if(!alta && x.d.eliminado === true) continue;            // eliminado: ya no existe
+    /* datos del último alta (una baja solo trae ci y nombre) */
+    let datos = alta ? x.d : null;
+    if(!datos){
+      const altas = rows.filter(e => e.tipo === 'Guardia' && limpiarCi(detalleDe(e).ci) === ci).sort((a,b) => horaReal(b) - horaReal(a));
+      datos = altas.length ? detalleDe(altas[0]) : x.d;
+    }
+    const turno = String(datos.turno || 'DIURNO');
+    out.set(ci, {ci, nombre: String(datos.nombre || x.d.nombre || x.e.guardia || '').trim(), turno,
+      bloque: String(datos.bloque || ''), activo: alta, desde: x.t});
+  }
+  return out;
+}
+
+/* Eventos de turno del mes (mismo rango que la app: 2 días antes y 3 después; correcciones sin tope) */
+async function eventosTurnoMes(ed, y, m){
+  const desde = new Date(y, m, 1); desde.setDate(desde.getDate() - 2);
+  const hasta = new Date(y, m + 1, 1); hasta.setDate(hasta.getDate() + 3);
+  const base = 'eventos?select=*&edificio=eq.' + enc(ed) + '&created_at=gte.' + enc(desde.toISOString());
+  const [turnos, corr] = await Promise.all([
+    paginas(base + '&created_at=lt.' + enc(hasta.toISOString()) + '&tipo=' + enc(inList(['Ingreso de turno','Salida de turno','Doblar turno'])) + '&order=created_at.asc,id.asc'),
+    paginas(base + '&tipo=eq.' + enc('Corrección de turno') + '&order=created_at.asc,id.asc'),
+  ]);
+  return [...turnos, ...corr];
+}
+
+/* Horas del mes por guardia (CI) con el mismo cálculo de la app */
+async function horasDelMes(ed, y, m, registro, cfg){
+  const ev = await eventosTurnoMes(ed, y, m);
+  const soloCi = registro.size > 0;
+  const puestos = PanelHoras.panelMes(ev, y, m, {toleranciaMin: cfg.tolerancia, soloConGuardia: soloCi});
+  return PanelHoras.porGuardia(puestos);
+}
+
+async function cargarGuardias(){
+  const box = $('#v-gua'); if(!st.edif){ box.innerHTML = '<div class="empty">Elige un edificio.</div>'; return; }
+  const mio = ++GU.gen, ed = st.edif, mes = mesActual();
+  if(!GU.datos || GU.datos.ed !== ed) box.innerHTML = '<div class="empty">Cargando guardias…</div>';
+  try{
+    const [registro, cfg] = await Promise.all([leerRegistro(ed), leerConfig(ed)]);
+    const horas = await horasDelMes(ed, mes.y, mes.m, registro, cfg);
+    if(mio !== GU.gen) return;
+    GU.datos = {ed, mes, registro, cfg, horas};
+    pintarGuardias();
+  }catch(e){
+    if(mio !== GU.gen) return;
+    box.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).<br>Toca ↻ para reintentar.</div>`;
+  }
+}
+
+function fmtSaldo(h){ const t = Turnos.saldo(h); const c = Math.round(h*60) > 0 ? 'pos' : (Math.round(h*60) < 0 ? 'neg' : ''); return `<b class="${c}">${esc(t)}</b>`; }
+
+function pintarGuardias(){
+  const D = GU.datos, box = $('#v-gua');
+  const lista = [...D.registro.values()].sort((a,b) => (b.activo - a.activo) || a.turno.localeCompare(b.turno) || a.nombre.localeCompare(b.nombre,'es'));
+  const activos = lista.filter(g => g.activo), bajas = lista.filter(g => !g.activo);
+  const card = g => {
+    const r = D.horas.get(g.ci);
+    return `<div class="card gcard" data-ci="${esc(g.ci)}">
+      <div class="gtop"><div class="gname">${esc(g.nombre)}</div>${g.activo ? '' : '<span class="badge" style="background:#94a3b8">DE BAJA</span>'}</div>
+      <div class="gid">ID ${esc(g.ci)} · ${TURNO_TXT[g.turno] || esc(g.turno)}${g.bloque ? ' · ' + esc(g.bloque) : ''}</div>
+      <div class="stats">
+        <div class="stat">${fmtSaldo(r ? r.saldo : 0)}<small>Horas extras</small></div>
+        <div class="stat"><b>${r ? r.dias : 0}</b><small>Días trabajados</small></div>
+        <div class="stat"><b>${r ? r.n24 : 0}</b><small>Turnos 24 h</small></div>
+        <div class="stat"><b>${r ? r.n36 : 0}</b><small>Turnos 36 h</small></div>
+      </div></div>`;
+  };
+  box.innerHTML = `
+    <button class="btn prim" id="gNuevo">＋ Registrar guardia</button>
+    <div class="h2">${esc(D.ed)} · ${esc(mesTxt(D.mes))} · ${activos.length} activo${activos.length === 1 ? '' : 's'}</div>
+    ${activos.length ? activos.map(card).join('') : '<div class="empty">No hay guardias registrados en este edificio.</div>'}
+    ${bajas.length ? `<button class="btn more" id="gBajas">${GU.verBajas ? 'Ocultar' : 'Ver'} dados de baja (${bajas.length})</button>
+      ${GU.verBajas ? bajas.map(card).join('') : ''}` : ''}
+    <div class="msg" style="margin-top:14px">Tolerancia de relevo: ${D.cfg.tolerancia} min (se cambia desde la app). Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.</div>`;
+}
+
+$('#v-gua').addEventListener('click', ev => {
+  if(ev.target.id === 'gNuevo') return formGuardia();
+  if(ev.target.id === 'gBajas'){ GU.verBajas = !GU.verBajas; return pintarGuardias(); }
+  const c = ev.target.closest('.gcard'); if(c) detalleGuardia(c.dataset.ci);
+});
+
+/* ---------- Registrar ---------- */
+function formGuardia(){
+  const D = GU.datos; if(!D) return;
+  let turno = 'DIURNO';
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>Registrar guardia</h2><div class="sub">${esc(D.ed)}</div>
+    <label class="field"><span>Nombre completo</span><input id="fNom" autocomplete="off" autocapitalize="words"></label>
+    <label class="field"><span>CI (carnet) — será su ID</span><input id="fCi" autocomplete="off" inputmode="text" autocapitalize="characters"></label>
+    <div class="field"><span>Turno</span><div class="seg" id="fTur">
+      <button class="btn on" data-t="DIURNO">Diurno</button><button class="btn" data-t="NOCTURNO">Nocturno</button><button class="btn" data-t="FRANQUERO">Franquero</button></div></div>
+    ${D.cfg.torres.length ? `<label class="field"><span>Bloque / torre</span><select id="fBlo">${D.cfg.torres.map(t => `<option>${esc(t)}</option>`).join('')}</select></label>` : ''}
+    <div id="fMsg"></div>
+    <button class="btn prim" id="fOk">Registrar</button>`;
+  $('#sheet').classList.add('on');
+  $('#fTur').onclick = e => { const b = e.target.closest('button'); if(!b) return; turno = b.dataset.t; [...$('#fTur').children].forEach(x => x.classList.toggle('on', x === b)); };
+  $('#fOk').onclick = async () => {
+    const nombre = $('#fNom').value.trim(), ci = limpiarCi($('#fCi').value), bloque = $('#fBlo') ? $('#fBlo').value : '';
+    const msg = t => $('#fMsg').innerHTML = `<div class="msg bad">${esc(t)}</div>`;
+    if(!nombre) return msg('Escribe el nombre');
+    if(ci.length < 4) return msg('Escribe el CI (carnet)');
+    const reg = await leerRegistro(D.ed).catch(() => D.registro);
+    const act = [...reg.values()].filter(g => g.activo);
+    if(act.some(g => g.ci === ci)) return msg('Ya hay un guardia activo con el CI ' + ci + ' en este edificio.');
+    if(turno !== 'FRANQUERO'){
+      const ya = act.filter(g => g.turno === turno && g.bloque === bloque);
+      if(ya.length) return msg(`Ya existe un guardia ${turno === 'NOCTURNO' ? 'nocturno' : 'diurno'} activo${bloque ? ' en ' + bloque : ''} (${ya[0].nombre}). Dalo de baja antes de registrar uno nuevo.`);
+    }
+    $('#fOk').disabled = true; $('#fOk').textContent = 'Guardando…';
+    try{
+      await apiEscribir('POST', 'eventos', nuevoEvento('Guardia', D.ed, nombre, {
+        ci, nombre, turno, bloque,
+        rol: turno === 'FRANQUERO' ? 'franquero' : 'guardia',
+        cargo: turno === 'FRANQUERO' ? 'Franquero' : 'Guardia de Seguridad',
+      }));
+      $('#sheet').classList.remove('on'); cargarGuardias();
+    }catch(e){ msg('No se pudo guardar: ' + e.message); $('#fOk').disabled = false; $('#fOk').textContent = 'Registrar'; }
+  };
+}
+
+/* ---------- Detalle ---------- */
+async function detalleGuardia(ci){
+  const D = GU.datos; const g = D.registro.get(ci); if(!g) return;
+  const r = D.horas.get(ci);
+  const turnosHtml = !r || !r.turnos.length ? '<div class="empty" style="padding:16px">Sin turnos en el mes.</div>' : r.turnos.map(t => {
+    const f = d => d.toLocaleDateString('es',{weekday:'short',day:'2-digit',month:'2-digit'}) + ' ' + hm(d);
+    const est = t.estado === 'ok' ? '' : ` <span class="badge" style="background:${t.estado === 'abierto' ? 'var(--ok)' : 'var(--warn)'}">${esc(t.estado === 'abierto' ? 'EN TURNO' : t.estado.toUpperCase())}</span>`;
+    const dur = t.cerrado ? ' · ' + Turnos.duracion(Math.round(t.horas * 60)) : '';
+    const movs = t.movimientos.map(m => `<div class="mv"><span class="${m.horas > 0 ? 'pos' : 'neg'}">${esc(Turnos.saldo(m.horas))}</span> ${esc(m.motivo)}${m.con ? ' (' + esc(m.con) + ')' : ''}</div>`).join('');
+    const notas = t.notas.map(n => `<div class="mv">${esc(n)}</div>`).join('');
+    return `<div class="turno"><div class="tl"><b>${esc(f(t.inicio))} → ${t.fin && t.estado !== 'sin ingreso' ? esc(hm(t.fin)) : '…'}</b><span>${t.nivel} h${dur}</span></div>${est}${movs}${notas}</div>`;
+  }).join('');
+  const s = (v, l) => `<div class="stat">${v}<small>${l}</small></div>`;
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>${esc(g.nombre)}</h2><div class="sub">ID ${esc(g.ci)} · ${TURNO_TXT[g.turno] || esc(g.turno)}${g.bloque ? ' · ' + esc(g.bloque) : ''} · ${g.activo ? 'Activo' : 'De baja'} · ${esc(mesTxt(D.mes))}</div>
+    <div class="stats">
+      ${s(fmtSaldo(r ? r.saldo : 0), 'Saldo horas extras')}${s(`<b class="${r && Math.round(r.aFavor*60) ? 'pos' : ''}">${esc(Turnos.saldo(r ? r.aFavor : 0))}</b>`, 'A favor')}
+      ${s(`<b class="${r && Math.round(r.enContra*60) ? 'neg' : ''}">${esc(r && Math.round(r.enContra*60) ? '-' + Turnos.duracion(Math.round(r.enContra*60)) : '0 h')}</b>`, 'En contra')}${s(`<b>${esc(Turnos.duracion(Math.round((r ? r.horas : 0)*60)))}</b>`, 'Horas trabajadas')}
+      ${s(`<b>${r ? r.dias : 0}</b>`, 'Días')}${s(`<b>${r ? r.n12 : 0}</b>`, 'Turnos 12 h')}${s(`<b>${r ? r.n24 : 0}</b>`, 'Turnos 24 h')}${s(`<b>${r ? r.n36 : 0}</b>`, 'Turnos 36 h')}
+    </div>
+    ${r && (r.vecesTarde || r.incompletos) ? `<div class="msg">${r.vecesTarde ? r.vecesTarde + ' llegada(s) tarde. ' : ''}${r.incompletos ? r.incompletos + ' turno(s) incompletos (no suman ni restan).' : ''}</div>` : ''}
+    <div class="h2">Ingresos y salidas</div><div class="card">${turnosHtml}</div>
+    <div class="h2">Registros del mes</div><div id="gReg"><div class="empty" style="padding:16px">Cargando…</div></div>
+    <div class="h2">Acciones</div>
+    <div class="acts">
+      ${g.activo ? '<button class="btn warnb" id="gBaja">Dar de baja</button>' : '<button class="btn" id="gAlta">Reactivar</button>'}
+      <button class="btn danger" id="gElim">Eliminar guardia</button>
+    </div>
+    <div id="gMsg"></div>`;
+  $('#sheet').classList.add('on');
+  const accion = async (fn, txt) => {
+    $('#gMsg').innerHTML = `<div class="msg">${esc(txt)}…</div>`;
+    try{ await fn(); $('#sheet').classList.remove('on'); cargarGuardias(); }
+    catch(e){ $('#gMsg').innerHTML = `<div class="msg bad">No se pudo: ${esc(e.message)}</div>`; }
+  };
+  if($('#gBaja')) $('#gBaja').onclick = () => {
+    if(!confirm(`¿Dar de baja a ${g.nombre}? Su historial y horas se conservan.`)) return;
+    accion(() => apiEscribir('POST', 'eventos', nuevoEvento('GuardiaBaja', D.ed, g.nombre, {ci:g.ci, nombre:g.nombre})), 'Dando de baja');
+  };
+  if($('#gAlta')) $('#gAlta').onclick = () => accion(async () => {
+    const act = [...(await leerRegistro(D.ed)).values()].filter(x => x.activo);
+    if(g.turno !== 'FRANQUERO'){
+      const ya = act.find(x => x.turno === g.turno && x.bloque === g.bloque && x.ci !== g.ci);
+      if(ya) throw new Error(`ya hay un guardia ${TURNO_TXT[g.turno].toLowerCase()} activo${g.bloque ? ' en ' + g.bloque : ''} (${ya.nombre})`);
+    }
+    await apiEscribir('POST', 'eventos', nuevoEvento('Guardia', D.ed, g.nombre, {ci:g.ci, nombre:g.nombre, turno:g.turno, bloque:g.bloque,
+      rol: g.turno === 'FRANQUERO' ? 'franquero' : 'guardia', cargo: g.turno === 'FRANQUERO' ? 'Franquero' : 'Guardia de Seguridad'}));
+  }, 'Reactivando');
+  $('#gElim').onclick = () => eliminarGuardia(g);
+  /* registros del mes de este guardia (por su CI) */
+  try{
+    const desde = new Date(D.mes.y, D.mes.m, 1), hasta = new Date(D.mes.y, D.mes.m + 1, 2);
+    const regs = (await paginas('eventos?select=*&edificio=eq.' + enc(D.ed) + '&detalle->>guard_ci=eq.' + enc(g.ci)
+      + '&created_at=gte.' + enc(desde.toISOString()) + '&created_at=lt.' + enc(hasta.toISOString()) + '&order=created_at.desc'))
+      .filter(e => { const t = horaReal(e); return t >= desde && t < new Date(D.mes.y, D.mes.m + 1, 1); })
+      .filter(e => !['Ingreso de turno','Salida de turno','Doblar turno'].includes(e.tipo))
+      .sort((a,b) => horaReal(b) - horaReal(a));
+    const cont = {}; regs.forEach(e => cont[e.tipo] = (cont[e.tipo]||0) + 1);
+    $('#gReg').innerHTML = !regs.length ? '<div class="empty" style="padding:16px">Sin rondas, visitas ni novedades registradas.</div>'
+      : `<div class="msg">${Object.entries(cont).map(([k,v]) => esc((ESTILO[k]||{t:k}).t) + ': <b>' + v + '</b>').join(' · ')}</div>`
+        + `<div class="card">${regs.slice(0, 150).map(e => { const t = horaReal(e), d = detalleDe(e);
+          return `<div class="turno"><div class="tl"><b>${esc((ESTILO[e.tipo]||{t:e.tipo}).t)}</b><span>${esc(t.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}))} ${esc(hm(t))}</span></div><div class="mv">${esc(resumen(e, d))}</div></div>`; }).join('')}</div>`;
+  }catch(e){ $('#gReg').innerHTML = `<div class="err" style="padding:16px">No se pudieron leer los registros (${esc(e.message)}).</div>`; }
+}
+
+function eliminarGuardia(g){
+  const D = GU.datos;
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cancelar</button>
+    <h2>Eliminar a ${esc(g.nombre)}</h2><div class="sub">${esc(D.ed)} · ID ${esc(g.ci)}</div>
+    <div class="msg">Se quita de la lista de guardias de este edificio y de todos sus celulares. Si solo dejó de trabajar, mejor usa <b>Dar de baja</b> (conserva todo).</div>
+    <label class="chk"><input type="checkbox" id="eDatos"> Borrar también TODOS sus registros de este edificio en la nube (ingresos, salidas, rondas, visitas…). No se puede deshacer.</label>
+    <label class="field"><span>Para confirmar escribe su CI: ${esc(g.ci)}</span><input id="eCi" autocomplete="off" autocapitalize="characters"></label>
+    <div id="eMsg"></div>
+    <button class="btn danger prim" id="eOk">Eliminar definitivamente</button>`;
+  $('#eOk').onclick = async () => {
+    if(limpiarCi($('#eCi').value) !== g.ci){ $('#eMsg').innerHTML = '<div class="msg bad">El CI no coincide.</div>'; return; }
+    const datos = $('#eDatos').checked;
+    $('#eOk').disabled = true; $('#eMsg').innerHTML = '<div class="msg">Eliminando…</div>';
+    try{
+      const ed = enc(D.ed), c = enc(g.ci);
+      await apiEscribir('DELETE', 'eventos?edificio=eq.' + ed + '&tipo=in.(Guardia,GuardiaBaja)&detalle->>ci=eq.' + c);
+      if(datos) await apiEscribir('DELETE', 'eventos?edificio=eq.' + ed + '&detalle->>guard_ci=eq.' + c);
+      /* aviso a los celulares para que también lo quiten (igual que la app) */
+      await apiEscribir('POST', 'eventos', nuevoEvento('GuardiaBaja', D.ed, g.nombre, {ci:g.ci, nombre:g.nombre, eliminado:true}));
+      $('#sheet').classList.remove('on'); cargarGuardias();
+    }catch(e){ $('#eMsg').innerHTML = `<div class="msg bad">No se pudo: ${esc(e.message)}</div>`; $('#eOk').disabled = false; }
+  };
+}
+
+/* ===================== INFORME MENSUAL EN PDF (solo supervisión) ===================== */
+const INF = {secciones:{visitas:true, encom:true, noved:true, turnos:true, rondas:true, hosp:true, horas:true}, url:null, blob:null, nombre:''};
+const SECC_INF = [
+  ['visitas','Visitas (carnet, destino y tarjeta)'],
+  ['encom','Encomiendas (llegada y entrega)'],
+  ['noved','Novedades (incidentes y advertencias)'],
+  ['turnos','Ingresos y salidas de turno'],
+  ['rondas','Rondas'],
+  ['hosp','Hospedajes'],
+  ['horas','Horas del personal (horas extras)'],
+];
+
+function pintarInforme(){
+  const mes = mesActual();
+  $('#v-inf').innerHTML = `
+    <div class="h2">Informe mensual · ${esc(st.edif || '')}</div>
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:4px">${esc(mesTxt(mes))}</div>
+      <div style="color:var(--mute);font-size:13px">Todos los movimientos del edificio en el mes, con fecha, hora y quién los registró. El mes se cambia arriba.</div>
+    </div>
+    <div class="h2">Qué incluir</div>
+    <div class="card">${SECC_INF.map(([k,t]) => `<label class="chk"><input type="checkbox" data-s="${k}" ${INF.secciones[k] ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div>
+    <button class="btn prim" id="iGen">Generar PDF</button>
+    <div id="iRes"></div>`;
+}
+$('#v-inf').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.s; if(k) INF.secciones[k] = e.target.checked; });
+$('#v-inf').addEventListener('click', async e => {
+  if(e.target.id === 'iGen') return generarInforme();
+  if(e.target.id === 'iShare'){
+    try{
+      const f = new File([INF.blob], INF.nombre, {type:'application/pdf'});
+      if(navigator.canShare && navigator.canShare({files:[f]})) await navigator.share({files:[f], title:INF.nombre});
+      else window.open(INF.url, '_blank');
+    }catch(_){}
+  }
+});
+
+/* Carga jsPDF solo cuando se necesita (CDN principal y, si falla, el alternativo) */
+function cargarScript(src){
+  return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => mal(new Error('no cargó ' + src)); document.head.appendChild(s); });
+}
+async function cargarJsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return window.jspdf.jsPDF;
+  const fuentes = [
+    ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'],
+    ['https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'],
+  ];
+  let err;
+  for(const [a, b] of fuentes){
+    try{
+      if(!(window.jspdf && window.jspdf.jsPDF)) await cargarScript(a);
+      if(!window.jspdf.jsPDF.API.autoTable) await cargarScript(b);
+      if(window.jspdf.jsPDF.API.autoTable) return window.jspdf.jsPDF;
+    }catch(x){ err = x; }
+  }
+  throw err || new Error('no se pudo cargar el generador de PDF');
+}
+
+/* Texto apto para la fuente del PDF (Latin-1) */
+function pdfTxt(v){
+  return String(v ?? '').replace(/[→⇒]/g, '->').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'")
+    .replace(/…/g, '...').replace(/•/g, '-').replace(/[^\x00-\xFF]/g, '').trim();
+}
+const fDia = t => String(t.getDate()).padStart(2,'0') + '/' + String(t.getMonth()+1).padStart(2,'0') + '/' + t.getFullYear();
+const fHora = t => String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
+const fDiaHora = t => t ? String(t.getDate()).padStart(2,'0') + '/' + String(t.getMonth()+1).padStart(2,'0') + ' ' + fHora(t) : '';
+const normal = s => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/* Une cada llegada (visita, encomienda, hospedaje) con su salida/entrega: por ref; si no hay ref (registros
+   anteriores a la v12.5), con la última llegada anterior de la misma persona y depto que no tenga salida */
+function emparejar(entradas, salidas, clave){
+  const porRef = new Map(); entradas.forEach(x => { if(x.d.ref) porRef.set(String(x.d.ref), x); });
+  const ordenadas = [...salidas].sort((a,b) => a.t - b.t);
+  for(const s of ordenadas){
+    let e = s.d.ref ? porRef.get(String(s.d.ref)) : null;
+    if(e && e.salida) e = null;
+    if(!e){
+      const k = clave(s.d);
+      const cand = entradas.filter(x => !x.salida && x.t <= s.t && clave(x.d) === k && (!s.d.ref || !x.d.ref));
+      e = cand.length ? cand[cand.length - 1] : null;
+    }
+    if(e) e.salida = s;
+  }
+}
+
+async function generarInforme(){
+  const ed = st.edif, mes = mesActual();
+  const res = $('#iRes'), btn = $('#iGen');
+  const paso = t => res.innerHTML = `<div class="msg">${esc(t)}</div>`;
+  btn.disabled = true;
+  try{
+    paso('Cargando el generador de PDF…');
+    const JsPDF = await cargarJsPDF();
+    paso('Leyendo los movimientos del mes…');
+    const desde = new Date(mes.y, mes.m, 1), hasta = new Date(mes.y, mes.m + 1, 1);
+    const hastaQ = new Date(mes.y, mes.m + 1, 4);   // salidas y subidas tardías de los últimos días
+    const filas = await paginas('eventos?select=*&edificio=eq.' + enc(ed) + '&created_at=gte.' + enc(desde.toISOString())
+      + '&created_at=lt.' + enc(hastaQ.toISOString()) + '&tipo=' + enc(inList(OPERATIVOS)) + '&order=created_at.asc,id.asc');
+    /* sin duplicados (mismo uid) y con su hora real */
+    const vistos = new Set(), ev = [];
+    for(const e of filas){
+      const d = detalleDe(e), u = d.uid || ('id' + e.id);
+      if(vistos.has(u)) continue; vistos.add(u);
+      ev.push({e, d, t: horaReal(e), g: e.guardia || ''});
+    }
+    ev.sort((a,b) => a.t - b.t);
+    const delMes = x => x.t >= desde && x.t < hasta;
+    const de = (...tipos) => ev.filter(x => tipos.includes(x.e.tipo));
+
+    let horas = null, regGuardias = null, cfg = null;
+    if(INF.secciones.horas){
+      paso('Calculando horas del personal…');
+      [regGuardias, cfg] = await Promise.all([leerRegistro(ed), leerConfig(ed)]);
+      horas = await horasDelMes(ed, mes.y, mes.m, regGuardias, cfg);
+    }
+
+    paso('Armando el PDF…');
+    const doc = new JsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+    const W = doc.internal.pageSize.getWidth();
+    const titulo = pdfTxt(`OSIRIS - Informe mensual de movimientos - ${ed} - ${mesTxt(mes)}`);
+    let y = 14;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(pdfTxt('Informe mensual de movimientos'), 14, y);
+    doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+    doc.text(pdfTxt(`Edificio: ${ed}     Mes: ${mesTxt(mes)}     Generado: ${fDia(new Date())} ${fHora(new Date())}`), 14, y + 7);
+    y += 14;
+
+    const azul = [15, 40, 80];
+    const tabla = (tituloSec, head, body, extra = {}) => {
+      if(y > 175){ doc.addPage(); y = 16; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...azul);
+      doc.text(pdfTxt(tituloSec + (body.length && !extra.sinTotal ? ` (${body.length})` : '')), 14, y); doc.setTextColor(0);
+      if(!body.length){ doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.text('Sin registros en el mes.', 14, y + 6); y += 14; return; }
+      doc.autoTable({startY: y + 3, head:[head.map(pdfTxt)], body: body.map(r => r.map(pdfTxt)), theme:'grid', margin:{left:10, right:10, top:16},
+        styles:{fontSize:7.5, cellPadding:1.4, overflow:'linebreak', valign:'top'}, headStyles:{fillColor:azul, textColor:255, fontSize:7.5},
+        alternateRowStyles:{fillColor:[244, 246, 250]}, ...extra, sinTotal:undefined});
+      y = doc.lastAutoTable.finalY + 10;
+    };
+
+    /* Resumen */
+    const cuenta = (...t) => de(...t).filter(delMes).length;
+    tabla('Resumen del mes', ['Visitas','Encomiendas','Incidentes','Advertencias','Rondas','Ingresos de turno','Salidas de turno','Hospedajes'],
+      [[de('Visita').filter(x => delMes(x) && normal(x.d.tipo) !== 'recurrente salida').length, cuenta('Encomienda'), cuenta('Incidente'), cuenta('Advertencia','Guardia sin uniforme'), cuenta('Ronda'),
+        cuenta('Ingreso de turno'), cuenta('Salida de turno'), cuenta('Hospedaje')].map(String)], {sinTotal:true});
+
+    if(INF.secciones.visitas){
+      const ent = de('Visita').filter(x => normal(x.d.tipo) !== 'recurrente salida');
+      const sal = [...de('Salida de visita'), ...de('Visita').filter(x => normal(x.d.tipo) === 'recurrente salida')];
+      emparejar(ent, sal, d => normal(d.nombre) + '|' + normal(d.depto));
+      const conSal = ent.some(x => x.salida);
+      const conDev = ent.some(x => x.salida && typeof x.salida.d.tarjeta_devuelta === 'boolean');
+      const body = ent.filter(delMes).map((x, i) => {
+        const d = x.d, s = x.salida, tar = String(d.tarjeta || (s && s.d.tarjeta) || '');
+        const dev = s && s.d.tarjeta_devuelta === true ? 'Sí' : (s && s.d.tarjeta_devuelta === false ? 'NO' : '');
+        return [String(i + 1), fDia(x.t), fHora(x.t), d.nombre || '', d.ci || '', d.depto || '', d.autoriza || '',
+          [d.motivo, normal(d.tipo).startsWith('recurrente') ? 'recurrente' : ''].filter(Boolean).join(' - '), d.placa || '',
+          tar, ...(conSal ? [s ? fDiaHora(s.t) : ''] : []), ...(conDev ? [dev] : []), x.g, ...(conSal ? [s ? s.g : ''] : [])];
+      });
+      tabla('Visitas', ['N°','Fecha','Ingreso','Visitante','CI / carnet','Depto. destino','Autoriza','Motivo','Placa','Tarjeta N°',
+        ...(conSal ? ['Salida'] : []), ...(conDev ? ['Devolvió tarjeta'] : []), 'Registró', ...(conSal ? ['Registró salida'] : [])], body,
+        {columnStyles:{0:{cellWidth:7}, 1:{cellWidth:16}, 2:{cellWidth:12}}});
+    }
+    if(INF.secciones.encom){
+      const ent = de('Encomienda'), sal = de('Entrega de encomienda');
+      emparejar(ent, sal, d => normal(d.depto) + '|' + normal(d.destinatario));
+      const conEnt = ent.some(x => x.salida);
+      tabla('Encomiendas', ['Fecha','Hora','Depto.','Destinatario','Empresa','Recibió (guardia)', ...(conEnt ? ['Entregada','Entregó (guardia)'] : [])],
+        ent.filter(delMes).map(x => [fDia(x.t), fHora(x.t), x.d.depto || '', x.d.destinatario || '', x.d.empresa || '', x.g,
+          ...(conEnt ? [x.salida ? fDiaHora(x.salida.t) : 'Pendiente', x.salida ? x.salida.g : ''] : [])]));
+    }
+    if(INF.secciones.noved){
+      tabla('Novedades', ['Fecha','Hora','Tipo','Detalle','Lugar / bloque','Registró'],
+        de('Incidente','Advertencia','Guardia sin uniforme').filter(delMes).map(x => {
+          const d = x.d;
+          if(x.e.tipo === 'Incidente') return [fDia(x.t), fHora(x.t), 'Incidente' + (d.tipo ? ': ' + d.tipo : ''), d.descripcion || d.observaciones || '', d.lugar || d.bloque || '', x.g];
+          if(x.e.tipo === 'Advertencia') return [fDia(x.t), fHora(x.t), 'Advertencia' + (d.tipo ? ': ' + d.tipo : ''), d.motivo || d.mensaje || '', d.bloque || '', x.g];
+          return [fDia(x.t), fHora(x.t), 'Guardia sin uniforme', 'Inició turno sin uniforme', d.bloque || '', x.g];
+        }), {columnStyles:{3:{cellWidth:110}}});
+    }
+    if(INF.secciones.turnos){
+      tabla('Ingresos y salidas de turno', ['Fecha','Hora','Movimiento','Guardia','CI','Bloque','Turno','Observaciones'],
+        de('Ingreso de turno','Salida de turno','Doblar turno').filter(delMes).map(x => [fDia(x.t), fHora(x.t),
+          x.e.tipo === 'Doblar turno' ? 'Dobla turno' : x.e.tipo.replace(' de turno', ''), x.g, x.d.guard_ci || '', x.d.bloque || '',
+          x.d.nivel ? x.d.nivel + ' h' : '', x.d.observaciones || '']), {columnStyles:{7:{cellWidth:90}}});
+    }
+    if(INF.secciones.rondas){
+      tabla('Rondas', ['Fecha','Hora','Guardia','Bloque','Puntos de control','Fotos','Observaciones'],
+        de('Ronda').filter(delMes).map(x => [fDia(x.t), fHora(x.t), x.g, x.d.bloque || '', x.d.puntos || '', x.d.fotos != null ? String(x.d.fotos) : '', x.d.observaciones || '']),
+        {columnStyles:{6:{cellWidth:110}}});
+    }
+    if(INF.secciones.hosp){
+      const ent = de('Hospedaje'), sal = de('Salida de hospedaje');
+      emparejar(ent, sal, d => normal(d.huesped) + '|' + normal(d.depto));
+      const conSalH = ent.some(x => x.salida);
+      tabla('Hospedajes', ['Fecha','Hora','Depto.','Huésped','Plataforma','Noches','Huéspedes', ...(conSalH ? ['Salida real'] : []), 'Registró'],
+        ent.filter(delMes).map(x => [fDia(x.t), fHora(x.t), x.d.depto || '', x.d.huesped || '', x.d.plataforma || '',
+          String(x.d.noches ?? ''), String(x.d.huespedes ?? ''), ...(conSalH ? [x.salida ? fDiaHora(x.salida.t) : ''] : []), x.g]));
+    }
+    if(horas){
+      const body = [];
+      const nombres = new Map([...regGuardias.values()].map(g => [g.ci, g]));
+      for(const [k, r] of [...horas.entries()].sort((a,b) => a[1].guardia.localeCompare(b[1].guardia, 'es'))){
+        const g = nombres.get(k);
+        body.push([g ? g.nombre : r.guardia, g ? g.ci : k, g ? (TURNO_TXT[g.turno] || g.turno) : '', String(r.dias), String(r.n12), String(r.n24), String(r.n36),
+          Turnos.duracion(Math.round(r.horas * 60)), Turnos.saldo(r.aFavor), r.enContra ? '-' + Turnos.duracion(Math.round(r.enContra * 60)) : '0 h',
+          Turnos.saldo(r.saldo), String(r.vecesTarde), String(r.incompletos)]);
+      }
+      tabla('Horas del personal', ['Guardia','CI','Turno','Días','12 h','24 h','36 h','Horas trabajadas','A favor','En contra','Saldo (horas extras)','Llegadas tarde','Incompletos'], body);
+      if(y > 190){ doc.addPage(); y = 16; }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text(doc.splitTextToSize(pdfTxt(`Cálculo igual al de la app: el mes empieza con el turno diurno del día 1 y termina con el nocturno del último día. `
+        + `Tolerancia de relevo ${cfg.tolerancia} min: hasta ese margen no cuenta; pasado el margen se cuentan los minutos completos.`), W - 28), 14, y);
+      y += 10;
+    }
+
+    /* encabezado y número de página */
+    const n = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= n; i++){
+      doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120);
+      if(i > 1) doc.text(titulo, 10, 9);
+      doc.text(`Página ${i} de ${n}`, W - 10, doc.internal.pageSize.getHeight() - 6, {align:'right'});
+      doc.setTextColor(0);
+    }
+    INF.nombre = pdfTxt(`Informe ${ed} ${mesTxt(mes)}.pdf`).replace(/[\\/:*?"<>|]/g, '-');
+    INF.blob = doc.output('blob');
+    if(INF.url) URL.revokeObjectURL(INF.url);
+    INF.url = URL.createObjectURL(INF.blob);
+    res.innerHTML = `<div class="msg ok">Informe listo: ${n} página${n === 1 ? '' : 's'}.</div>
+      <div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${INF.url}" download="${esc(INF.nombre)}" target="_blank" rel="noopener">Abrir / descargar</a>
+      <button class="btn prim" id="iShare">Compartir</button></div>`;
+  }catch(e){
+    res.innerHTML = `<div class="msg bad">No se pudo generar el informe (${esc(e.message)}). Revisa tu conexión e inténtalo de nuevo.</div>`;
+  }finally{ btn.disabled = false; }
+}
+
+/* ===================== ACCESO: PIN de supervisión y links de administradores ===================== */
+const MON = '__monitor__';   // "edificio" interno donde el monitor guarda su configuración (la app no lo lee)
+const ACC = {modo:'sup', link:null, pin:null};
+
+/* SHA-256 (con respaldo en JS por si el navegador no trae crypto.subtle) */
+async function sha256(txt){
+  const data = new TextEncoder().encode(txt);
+  if(window.crypto && crypto.subtle){
+    try{ const b = await crypto.subtle.digest('SHA-256', data); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join(''); }catch(_){}
+  }
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const l = data.length, n = ((l + 9 + 63) >> 6) << 6, m = new Uint8Array(n); m.set(data); m[l] = 0x80;
+  const dv = new DataView(m.buffer); dv.setUint32(n - 4, l * 8); dv.setUint32(n - 8, Math.floor(l / 0x20000000));
+  const w = new Uint32Array(64), r = (x, k) => (x >>> k) | (x << (32 - k));
+  for(let o = 0; o < n; o += 64){
+    for(let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
+    for(let i = 16; i < 64; i++){ const a = w[i-15], b = w[i-2]; w[i] = (w[i-16] + (r(a,7) ^ r(a,18) ^ (a >>> 3)) + w[i-7] + (r(b,17) ^ r(b,19) ^ (b >>> 10))) | 0; }
+    let [a,b,c,d,e,f,g,h] = H;
+    for(let i = 0; i < 64; i++){
+      const t1 = (h + (r(e,6) ^ r(e,11) ^ r(e,25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+      const t2 = ((r(a,2) ^ r(a,13) ^ r(a,22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0]=(H[0]+a)|0; H[1]=(H[1]+b)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+d)|0; H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0;
+  }
+  return H.map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+function azar(n){
+  const abc = 'abcdefghijkmnpqrstuvwxyz23456789', b = new Uint8Array(n);
+  (window.crypto || {getRandomValues: a => a.map(() => Math.floor(Math.random() * 256))}).getRandomValues(b);
+  return [...b].map(x => abc[x % abc.length]).join('');
+}
+
+async function leerPin(){
+  const r = await api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.pin&order=created_at.desc&limit=1');
+  return r.length ? detalleDe(r[0]) : null;
+}
+async function guardarPin(pin){
+  const salt = azar(16), hash = await sha256(salt + ':' + pin);
+  const ev = nuevoEvento('Config', MON, 'Supervisión', {clase:'pin', salt, hash});
+  await apiEscribir('POST', 'eventos', ev);
+  /* el PIN anterior ya no sirve */
+  try{ await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.pin&detalle->>uid=neq.' + enc(ev.detalle.uid)); }catch(_){}
+  ACC.pin = {salt, hash}; guardar('sup', hash);
+}
+
+function pantallaBloqueo(html){ $('#lockBox').innerHTML = html; $('#lock').hidden = false; }
+function quitarBloqueo(){ $('#lock').hidden = true; }
+
+/* Supervisión: pide el PIN una vez por celular (o lo crea la primera vez) */
+async function accesoSupervision(){
+  let pin;
+  try{ pin = await leerPin(); }
+  catch(e){
+    pantallaBloqueo(`<h2>Sin conexión</h2><p style="color:var(--mute)">No se pudo conectar con la nube (${esc(e.message)}).</p><button class="btn prim" onclick="location.reload()">Reintentar</button>`);
+    return false;
+  }
+  ACC.pin = pin;
+  if(pin && leer('sup') === pin.hash) return true;
+  return new Promise(listo => {
+    if(!pin){
+      pantallaBloqueo(`<h2>Crea tu PIN de supervisión</h2>
+        <p style="color:var(--mute);font-size:14px">Protege la gestión de guardias, los informes y los links. Se pide una sola vez en cada celular.</p>
+        <label class="field"><span>PIN nuevo (4 a 8 números)</span><input id="p1" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <label class="field"><span>Repite el PIN</span><input id="p2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <div id="pMsg"></div><button class="btn prim" id="pOk">Guardar PIN</button>`);
+      $('#pOk').onclick = async () => {
+        const a = $('#p1').value.trim(), b = $('#p2').value.trim();
+        if(!/^\d{4,8}$/.test(a)) return $('#pMsg').innerHTML = '<div class="msg bad">El PIN debe tener de 4 a 8 números.</div>';
+        if(a !== b) return $('#pMsg').innerHTML = '<div class="msg bad">Los PIN no coinciden.</div>';
+        $('#pOk').disabled = true;
+        try{ await guardarPin(a); quitarBloqueo(); listo(true); }
+        catch(e){ $('#pMsg').innerHTML = `<div class="msg bad">No se pudo guardar (${esc(e.message)}).</div>`; $('#pOk').disabled = false; }
+      };
+    } else {
+      pantallaBloqueo(`<h2>Osiris · Supervisión</h2>
+        <label class="field"><span>Ingresa tu PIN</span><input id="p1" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password"></label>
+        <div id="pMsg"></div><button class="btn prim" id="pOk">Entrar</button>`);
+      const entrar = async () => {
+        const h = await sha256(pin.salt + ':' + $('#p1').value.trim());
+        if(h !== pin.hash){ $('#pMsg').innerHTML = '<div class="msg bad">PIN incorrecto.</div>'; $('#p1').value = ''; return; }
+        guardar('sup', h); quitarBloqueo(); listo(true);
+      };
+      $('#pOk').onclick = entrar;
+      $('#p1').addEventListener('keydown', e => { if(e.key === 'Enter') entrar(); });
+    }
+    setTimeout(() => { const i = $('#p1'); if(i) i.focus(); }, 50);
+  });
+}
+
+/* Link de administrador: solo ve EN VIVO su edificio */
+async function accesoAdmin(token){
+  let r;
+  try{ r = await api('eventos?select=detalle&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&detalle->>token=eq.' + enc(token) + '&limit=1'); }
+  catch(e){
+    pantallaBloqueo(`<h2>Sin conexión</h2><p style="color:var(--mute)">${esc(e.message)}</p><button class="btn prim" onclick="location.reload()">Reintentar</button>`);
+    return false;
+  }
+  if(!r.length){
+    pantallaBloqueo('<h2>Link desactivado</h2><p style="color:var(--mute)">Este link ya no tiene acceso. Pide uno nuevo a supervisión.</p>');
+    return false;
+  }
+  ACC.link = detalleDe(r[0]);
+  return true;
+}
+
+/* ---------- Ajustes: links de administradores y PIN ---------- */
+function urlLink(token){ const u = new URL(location.href); u.search = '?a=' + token; u.hash = ''; return u.toString(); }
+async function pintarAjustes(){
+  const box = $('#v-cfg');
+  box.innerHTML = '<div class="empty">Cargando…</div>';
+  let links = [];
+  try{ links = await api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&order=created_at.desc&limit=200'); }
+  catch(e){ box.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
+  const eds = [...$('#edif').options].map(o => o.value).filter(Boolean);
+  box.innerHTML = `
+    <div class="h2">Links para administradores</div>
+    <div class="card">
+      <div style="font-size:14px;color:var(--mute);margin-bottom:6px">Cada link muestra <b>solo los movimientos en vivo</b> de un edificio. No ve guardias, informes ni otros edificios. Lo puedes desactivar cuando quieras.</div>
+      <label class="field"><span>Para quién es (ej. Administrador Sr. Pérez)</span><input id="lNom" autocomplete="off"></label>
+      <label class="field"><span>Edificio</span><select id="lEd">${eds.map(e => `<option ${e === st.edif ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></label>
+      <div id="lMsg"></div>
+      <button class="btn prim" id="lCrear">Crear link</button>
+    </div>
+    <div class="card">${links.length ? links.map(x => { const d = detalleDe(x); const u = urlLink(d.token);
+      return `<div class="lnk" data-tok="${esc(d.token)}" data-url="${esc(u)}" data-nom="${esc(d.nombre || '')}" data-ed="${esc(d.edificio || '')}">
+        <b>${esc(d.nombre || 'Administrador')}</b> · ${esc(d.edificio || '')}
+        <div class="u">${esc(u)}</div>
+        <div class="acts"><button class="btn" data-a="copiar">Copiar</button><button class="btn" data-a="compartir">Compartir</button><button class="btn" data-a="borrar" style="color:var(--bad)">Desactivar</button></div>
+      </div>`; }).join('') : '<div class="empty" style="padding:14px">Todavía no creaste links.</div>'}</div>
+    <div class="h2">Seguridad</div>
+    <div class="card">
+      <div class="acts"><button class="btn" id="cPin">Cambiar PIN</button><button class="btn" id="cSalir">Cerrar sesión en este celular</button></div>
+    </div>
+    <div class="msg">Los links bloquean la pantalla en su edificio, pero como la app usa la clave pública de Supabase, alguien con conocimientos técnicos podría leer otros datos. Compártelos solo con personas de confianza.</div>`;
+}
+$('#v-cfg').addEventListener('click', async ev => {
+  const t = ev.target;
+  if(t.id === 'lCrear'){
+    const nombre = $('#lNom').value.trim(), ed = $('#lEd').value;
+    if(!nombre){ $('#lMsg').innerHTML = '<div class="msg bad">Escribe para quién es el link.</div>'; return; }
+    t.disabled = true;
+    try{ await apiEscribir('POST', 'eventos', nuevoEvento('Config', MON, 'Supervisión', {clase:'link', token: azar(20), edificio: ed, nombre})); pintarAjustes(); }
+    catch(e){ $('#lMsg').innerHTML = `<div class="msg bad">No se pudo crear (${esc(e.message)}).</div>`; t.disabled = false; }
+    return;
+  }
+  if(t.id === 'cSalir'){ guardar('sup', ''); location.reload(); return; }
+  if(t.id === 'cPin'){
+    const a = prompt('PIN nuevo (4 a 8 números):'); if(a === null) return;
+    if(!/^\d{4,8}$/.test(a.trim())) return alert('El PIN debe tener de 4 a 8 números.');
+    if(prompt('Repite el PIN nuevo:') !== a) return alert('Los PIN no coinciden.');
+    try{ await guardarPin(a.trim()); alert('PIN cambiado. Los demás celulares lo pedirán de nuevo.'); }catch(e){ alert('No se pudo cambiar: ' + e.message); }
+    return;
+  }
+  const fila = t.closest('.lnk'); if(!fila || !t.dataset.a) return;
+  const url = fila.dataset.url;
+  if(t.dataset.a === 'copiar'){
+    try{ await navigator.clipboard.writeText(url); t.textContent = 'Copiado ✓'; }catch(_){ prompt('Copia el link:', url); }
+  } else if(t.dataset.a === 'compartir'){
+    const texto = `Osiris · Monitoreo en vivo de ${fila.dataset.ed}: ${url}`;
+    if(navigator.share){ try{ await navigator.share({title:'Osiris · Monitoreo', text:texto}); }catch(_){} }
+    else location.href = 'https://wa.me/?text=' + enc(texto);
+  } else if(t.dataset.a === 'borrar'){
+    if(!confirm(`¿Desactivar el link de ${fila.dataset.nom || 'este administrador'}? Dejará de funcionar al instante.`)) return;
+    try{ await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&detalle->>token=eq.' + enc(fila.dataset.tok)); pintarAjustes(); }
+    catch(e){ alert('No se pudo desactivar: ' + e.message); }
+  }
+});
+
+/* ---------- Navegación ---------- */
+function irA(v){
+  vistaActual = v;
+  for(const x of ['mov','gua','inf','cfg']) $('#v-' + x).hidden = x !== v;
+  [...$('#bnav').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $('#tabs').style.display = v === 'mov' ? '' : 'none';
+  $('#online').style.display = v === 'mov' ? '' : 'none';
+  $('#periodo').hidden = v !== 'mov';
+  $('#mesSel').hidden = !(v === 'gua' || v === 'inf');
+  scrollTo({top:0});
+  if(v === 'mov') refrescar();
+  if(v === 'gua') cargarGuardias();
+  if(v === 'inf') pintarInforme();
+  if(v === 'cfg') pintarAjustes();
+}
+function refrescarVista(){
+  if(vistaActual === 'mov') refrescar(true);
+  else if(vistaActual === 'gua') cargarGuardias();
+  else if(vistaActual === 'inf') pintarInforme();
+  else pintarAjustes();
+}
+function alCambiarEdificio(){ GU.datos = null; if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'inf') pintarInforme(); }
+$('#bnav').addEventListener('click', e => { const b = e.target.closest('button'); if(b) irA(b.dataset.v); });
+$('#mesSel').addEventListener('change', () => { if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'inf') pintarInforme(); });
 
 /* ---------- Arranque ---------- */
 (async function(){
   const p = leer('periodo'); if(p && [...$('#periodo').options].some(o => o.value === p)){ st.periodo = p; $('#periodo').value = p; }
+  llenarMeses();
   pintarTabs();
   $('#list').innerHTML = '<div class="empty">Cargando movimientos…</div>';
-  try{ await cargarEdificios(); }
-  catch(e){
-    $('#dot').classList.add('off'); $('#liveTxt').textContent = 'Sin conexión';
-    $('#list').innerHTML = `<div class="err">No se pudo conectar con la nube (${esc(e.message)}).<br>Toca ↻ para reintentar.</div>`;
-    $('#refresh').addEventListener('click', () => location.reload(), {once:true});
-    return;
+  const token = new URLSearchParams(location.search).get('a');
+  if(token){
+    ACC.modo = 'admin';
+    document.body.classList.add('admin');
+    if(!(await accesoAdmin(token))) return;
+    st.edif = ACC.link.edificio;
+    $('#edif').hidden = true;
+    $('#edifFijo').hidden = false; $('#edifFijo').textContent = st.edif;
+    document.title = 'Osiris · ' + st.edif;
+  } else {
+    if(!(await accesoSupervision())) return;
+    $('#bnav').hidden = false;
+    try{ await cargarEdificios(); }
+    catch(e){
+      $('#dot').classList.add('off'); $('#liveTxt').textContent = 'Sin conexión';
+      $('#list').innerHTML = `<div class="err">No se pudo conectar con la nube (${esc(e.message)}).<br>Toca ↻ para reintentar.</div>`;
+      $('#refresh').addEventListener('click', () => location.reload(), {once:true});
+      return;
+    }
   }
   await refrescar();
-  st.timer = setInterval(() => { if(!document.hidden) refrescar(); }, REFRESCO_MS);
+  st.timer = setInterval(() => {
+    if(document.hidden || vistaActual !== 'mov') return;
+    if(ACC.modo === 'admin'){
+      /* si desactivan el link, deja de mostrar datos */
+      api('eventos?select=id&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>token=eq.' + enc(token) + '&limit=1')
+        .then(r => { if(!r.length){ clearInterval(st.timer); pantallaBloqueo('<h2>Link desactivado</h2><p style="color:var(--mute)">Este link ya no tiene acceso.</p>'); } }).catch(() => {});
+    }
+    refrescar();
+  }, REFRESCO_MS);
 })();
+
 </script>
 </body>
 </html>
