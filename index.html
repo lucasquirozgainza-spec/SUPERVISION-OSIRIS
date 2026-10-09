@@ -93,12 +93,30 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
 .lb .dl{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);background:rgba(255,255,255,.18);color:#fff;text-decoration:none}
 /* ---- v2: navegación inferior, guardias, informe, ajustes ---- */
 [hidden]{display:none !important}
+/* campos de texto: misma altura, borde y alineación en todos lados (iOS incluido) */
+.inp,.field input,.field select,.row select,.row input{box-sizing:border-box;height:46px;border:1px solid var(--line);background-color:var(--card);color:var(--ink);border-radius:12px;padding:0 12px;font:inherit;font-size:16px;margin:0}
+.field input,.field select,.inp{width:100%;display:block}
+input[type=date],input[type=time],input[type=search]{-webkit-appearance:none;appearance:none;min-width:0;text-align:left;line-height:44px}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
+input[type=search]::-webkit-search-decoration,input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none}
+.inp:focus,.field input:focus,.field select:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.sbar{display:flex;gap:8px;align-items:stretch}
+.sbar .inp{flex:1;min-width:0}
+.sbar .btn{flex:0 0 auto;height:46px;padding:0 16px;font-weight:700;background:var(--acc);color:var(--acc-ink);border-radius:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chips .tab{padding:6px 11px;font-size:13.5px}
+.drow{display:flex;align-items:center;gap:10px;margin-top:10px}
+.drow span{font-size:14px;color:var(--mute);flex:0 0 auto}
+.drow .inp{flex:1}
+.ic svg{display:block}
+.card > .field:first-child,.card > div > .field:first-child{margin-top:0}
+.field select,.row select{padding-right:34px;font-weight:600}
 body{padding-bottom:calc(env(safe-area-inset-bottom) + 70px)}
 body.admin{padding-bottom:0}
 .bnav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;background:var(--card);border-top:1px solid var(--line);
   padding:4px 4px calc(env(safe-area-inset-bottom) + 4px)}
 .bnav button{flex:1;border:0;background:none;color:var(--mute);font:inherit;font-size:11px;font-weight:600;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px}
-.bnav button span{font-size:20px;line-height:1}
+.bnav .nico{display:flex;align-items:center;justify-content:center;height:24px}
 .bnav button.on{color:var(--acc)}
 .vista[hidden]{display:none}
 .h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);margin:16px 2px 8px;font-weight:700}
@@ -116,7 +134,7 @@ body.admin{padding-bottom:0}
 .pos{color:var(--ok)} .neg{color:var(--bad)}
 .field{display:block;margin:10px 0}
 .field span{display:block;font-size:13px;color:var(--mute);margin-bottom:4px}
-.field input{width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:11px 12px;font:inherit;font-size:16px}
+
 .field select{width:100%}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{flex:1;min-width:30%}
@@ -180,12 +198,12 @@ body.admin{padding-bottom:0}
 </main>
 
 <nav class="bnav" id="bnav" hidden>
-  <button data-v="mov" class="on"><span>◉</span>En vivo</button>
-  <button data-v="gua"><span>☷</span>Guardias</button>
-  <button data-v="bus"><span>⌕</span>Buscar</button>
-  <button data-v="inf"><span>⎙</span>Informe</button>
-  <button data-v="edi"><span>⌂</span>Edificio</button>
-  <button data-v="cfg"><span>⚙</span>Ajustes</button>
+  <button data-v="mov" class="on"><span class="nico" data-ico="envivo"></span>En vivo</button>
+  <button data-v="gua"><span class="nico" data-ico="guardias"></span>Guardias</button>
+  <button data-v="bus"><span class="nico" data-ico="buscar"></span>Buscar</button>
+  <button data-v="inf"><span class="nico" data-ico="informe"></span>Informe</button>
+  <button data-v="edi"><span class="nico" data-ico="edificio"></span>Edificio</button>
+  <button data-v="cfg"><span class="nico" data-ico="ajustes"></span>Ajustes</button>
 </nav>
 
 <div class="sheet" id="sheet"><div class="panel" id="panel"></div></div>
@@ -216,20 +234,42 @@ const SECCIONES = [
 const OPERATIVOS = ['Ingreso de turno','Salida de turno','Doblar turno','Visita','Ronda','Incidente',
   'Encomienda','Hospedaje','Advertencia','Guardia sin uniforme',
   'Salida de visita','Entrega de encomienda','Salida de hospedaje'];
+/* Íconos (mismo trazo y tamaño en toda la página) */
+const ICONOS = {
+  envivo:'<circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/>',
+  guardias:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  buscar:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  informe:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/>',
+  edificio:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  ajustes:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  ingreso:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
+  salida:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  reloj:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  ronda:'<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  incidente:'<path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9z"/><path d="M12 8v4M12 16h.01"/>',
+  alerta:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  camisa:'<path d="M20.4 6.6 16 4l-2 2h-4L8 4 3.6 6.6l1.9 4L8 9.6V20h8V9.6l2.5 1z"/>',
+  visita:'<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
+  paquete:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  cama:'<path d="M2 20V6M2 16h20M22 20v-6a3 3 0 0 0-3-3h-9v5"/><circle cx="6" cy="12" r="2"/>',
+  punto:'<circle cx="12" cy="12" r="4"/>'
+};
+function icono(k, t = 20){ return `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[k] || ICONOS.punto}</svg>`; }
 const ESTILO = {
-  'Ingreso de turno':     {c:'var(--ok)',     i:'⏵', t:'Ingreso de turno'},
-  'Doblar turno':         {c:'var(--violet)', i:'⇆', t:'Dobla turno'},
-  'Salida de turno':      {c:'#64748b',       i:'⏹', t:'Salida de turno'},
-  'Ronda':                {c:'var(--info)',   i:'⌖', t:'Ronda'},
-  'Incidente':            {c:'var(--bad)',    i:'!', t:'Incidente'},
-  'Advertencia':          {c:'var(--warn)',   i:'⚠', t:'Advertencia'},
-  'Guardia sin uniforme': {c:'var(--warn)',   i:'⚠', t:'Guardia sin uniforme'},
-  'Visita':               {c:'var(--acc)',    i:'☺', t:'Visita'},
-  'Encomienda':           {c:'#a16207',       i:'▣', t:'Encomienda'},
-  'Hospedaje':            {c:'#0d9488',       i:'⌂', t:'Hospedaje'},
-  'Salida de visita':     {c:'#64748b',       i:'☺', t:'Salida de visita'},
-  'Entrega de encomienda':{c:'#a16207',       i:'✓', t:'Encomienda entregada'},
-  'Salida de hospedaje':  {c:'#0d9488',       i:'⌂', t:'Salida de hospedaje'},
+  'Ingreso de turno':     {c:'var(--ok)',     i:'ingreso', t:'Ingreso de turno'},
+  'Doblar turno':         {c:'var(--violet)', i:'reloj', t:'Dobla turno'},
+  'Salida de turno':      {c:'#64748b',       i:'salida', t:'Salida de turno'},
+  'Ronda':                {c:'var(--info)',   i:'ronda', t:'Ronda'},
+  'Incidente':            {c:'var(--bad)',    i:'incidente', t:'Incidente'},
+  'Advertencia':          {c:'var(--warn)',   i:'alerta', t:'Advertencia'},
+  'Guardia sin uniforme': {c:'var(--warn)',   i:'camisa', t:'Guardia sin uniforme'},
+  'Visita':               {c:'var(--acc)',    i:'visita', t:'Visita'},
+  'Encomienda':           {c:'#a16207',       i:'paquete', t:'Encomienda'},
+  'Hospedaje':            {c:'#0d9488',       i:'cama', t:'Hospedaje'},
+  'Salida de visita':     {c:'#64748b',       i:'salida', t:'Salida de visita'},
+  'Entrega de encomienda':{c:'#a16207',       i:'check', t:'Encomienda entregada'},
+  'Salida de hospedaje':  {c:'#0d9488',       i:'salida', t:'Salida de hospedaje'},
 };
 /* Campos internos que no se muestran */
 const OCULTOS = new Set(['uid','ts','guard_ci','guard_id','guard_uuid','turno_ref','device_id','foto_url','fotos_url',
@@ -246,7 +286,7 @@ const ETIQUETAS = {
   dias:'Días', cantidad:'Personas', mensaje:'Mensaje',
 };
 /* Orden de preferencia para la línea de resumen */
-const RESUMEN = ['observaciones','descripcion','motivo','nombre','huesped','destinatario','ubicacion','punto','depto','placa','nivel'];
+const RESUMEN = ['observaciones','descripcion','motivo','nombre','huesped','destinatario','punto','depto','placa'];
 
 const $ = s => document.querySelector(s);
 const st = {edif:null, sec:'todo', periodo:'hoy', datos:[], conteos:{}, hayMas:false, timer:null, cargando:false};
@@ -477,14 +517,14 @@ function resumen(e, d){
     return [d.depto ? 'Depto ' + d.depto : '', d.destinatario, d.empresa].filter(Boolean).join(' · ');
   if(e.tipo === 'Incidente') return [d.tipo, d.lugar, d.descripcion].filter(Boolean).join(' · ');
   for(const k of RESUMEN) if(d[k] && !OCULTOS.has(k)) return valorTxt(d[k]);
-  const c = camposVisibles(d).filter(([k]) => !['bloque','torre','relevos','nivel'].includes(k));
+  const c = camposVisibles(d).filter(([k]) => !['bloque','torre','relevos','nivel','ubicacion','cargo'].includes(k));
   return c.length ? c.slice(0,2).map(([k,v]) => (ETIQUETAS[k]||k) + ': ' + valorTxt(v)).join(' · ') : '';
 }
 function subtitulo(e, d){
   const p = [];
   if(e.guardia) p.push(e.guardia);
   const b = d.bloque || d.torre; if(b) p.push(valorTxt(b));
-  if(d.nivel) p.push('Nivel ' + valorTxt(d.nivel));
+  if(d.nivel && String(d.nivel) !== '12') p.push('Turno de ' + valorTxt(d.nivel) + ' h');
   return p.join(' · ');
 }
 
@@ -537,11 +577,11 @@ function pintarLista(){
     const t = horaReal(e), d = detalleDe(e);
     const dd = diaTxt(t);
     if(dd !== dia){ dia = dd; html += `<div class="day">${esc(dd)}</div>`; }
-    const es = ESTILO[e.tipo] || {c:'#64748b', i:'•', t:e.tipo};
+    const es = ESTILO[e.tipo] || {c:'#64748b', i:'punto', t:e.tipo};
     const fotos = fotosDe(d);
     const r = resumen(e, d);
     html += `<div class="card ev" data-i="${i}">
-      <div class="ic" style="background:${es.c}">${es.i}</div>
+      <div class="ic" style="background:${es.c}">${icono(es.i)}</div>
       <div class="bd">
         <div class="l1"><span class="ti">${esc(es.t)}</span><span class="hr">${hm(t)}</span></div>
         <div class="l2">${esc(subtitulo(e, d)) || '&nbsp;'}</div>
@@ -1592,7 +1632,7 @@ async function cargarAjustesEd(){
         <div style="font-size:13px;color:var(--mute)">Hasta ese margen no cuenta; pasado el margen se cuentan todos los minutos.</div></div>
       <div class="h2">Bloques / torres</div>
       <div class="card"><div id="aTorres" style="display:flex;flex-wrap:wrap;gap:6px">${torres.map((t,i) => `<button class="tab on" data-torre="${i}">${esc(t)} ✕</button>`).join('') || '<span style="color:var(--mute);font-size:14px">Edificio sin bloques</span>'}</div>
-        <div class="row"><input id="aTorreN" class="lockedEd" style="font-weight:500" placeholder="Nuevo bloque (ej. Torre 3)"><button class="btn" id="aTorreAdd">Agregar</button></div></div>
+        <div class="row"><input id="aTorreN" class="inp" style="flex:1" placeholder="Nuevo bloque"><button class="btn" id="aTorreAdd" style="height:46px">Agregar</button></div></div>
       <div id="aMsg"></div>
       <button class="btn prim" id="aGuardar" style="margin-top:10px">Guardar y enviar a los celulares</button>
       <div class="msg">Los celulares del edificio aplican estos cambios en 1 a 2 minutos (con internet).</div>`;
@@ -1922,12 +1962,11 @@ const SERVIDOR = 'Supabase (PostgreSQL) - proyecto idwsbukgtogiwvfrurlc';
 function pintarBuscar(){
   $('#v-bus').innerHTML = `
     <div class="card">
-      <label class="field" style="margin-top:0"><span>Buscar</span><input id="bQ" value="${esc(BUS.q)}" placeholder="Nombre, carnet, N° de tarjeta, placa, depto o palabra" autocomplete="off" enterkeyhint="search"></label>
-      <div class="tabs" id="bTipos" style="margin:4px -12px 0;padding:0 12px 2px">${TIPOS_BUS.map(([k,t]) => `<button class="tab${BUS.tipo === k ? ' on' : ''}" data-bt="${k}">${t}</button>`).join('')}</div>
-      <label class="field"><span>Día exacto (opcional; si no, todo el mes elegido arriba)</span><input id="bDia" type="date" value="${esc(BUS.dia)}"></label>
-      <button class="btn prim" id="bIr">Buscar en ${esc(mesTxt(mesActual()))}</button>
+      <div class="sbar"><input id="bQ" class="inp" type="search" value="${esc(BUS.q)}" placeholder="Nombre, carnet o tarjeta" autocomplete="off" enterkeyhint="search"><button class="btn" id="bIr">Buscar</button></div>
+      <div class="chips" id="bTipos">${TIPOS_BUS.map(([k,t]) => `<button class="tab${BUS.tipo === k ? ' on' : ''}" data-bt="${k}">${t}</button>`).join('')}</div>
+      <label class="drow"><span>Día</span><input id="bDia" class="inp" type="date" value="${esc(BUS.dia)}"></label>
     </div>
-    <div id="bRes">${BUS.res.length ? '' : '<div class="empty">Escribe lo que buscas (o deja vacío para ver todo) y toca Buscar.</div>'}</div>`;
+    <div id="bRes">${BUS.res.length ? '' : '<div class="empty">Busca en el mes elegido arriba.</div>'}</div>`;
   if(BUS.res.length) pintarResultados();
 }
 $('#v-bus').addEventListener('keydown', e => { if(e.target.id === 'bQ' && e.key === 'Enter'){ e.preventDefault(); buscar(); } });
@@ -1979,10 +2018,10 @@ function pintarResultados(){
   if(!R.length){ box.innerHTML = '<div class="empty">No se encontraron registros con esa búsqueda en el periodo elegido.</div>'; return; }
   box.innerHTML = `
     <div class="msg" id="bBarra" style="position:sticky;top:120px;z-index:3"></div>
-    ${R.slice(0, 300).map(({e, t}, i) => { const d = detalleDe(e), es = ESTILO[e.tipo] || {c:'#64748b', i:'•', t:e.tipo}, fotos = fotosDe(d);
+    ${R.slice(0, 300).map(({e, t}, i) => { const d = detalleDe(e), es = ESTILO[e.tipo] || {c:'#64748b', i:'punto', t:e.tipo}, fotos = fotosDe(d);
       return `<div class="card ev" data-br="${i}" style="gap:8px">
         <input type="checkbox" data-bi="${i}" ${BUS.sel.has(i) ? 'checked' : ''} style="width:24px;height:24px;flex:0 0 24px;margin-top:7px;accent-color:var(--acc)" aria-label="Elegir">
-        <div class="ic" style="background:${es.c}">${es.i}</div>
+        <div class="ic" style="background:${es.c}">${icono(es.i)}</div>
         <div class="bd"><div class="l1"><span class="ti">${esc(es.t)}</span><span class="hr">${esc(t.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}))} ${esc(hm(t))}</span></div>
           <div class="l2">${esc(subtitulo(e, d)) || '&nbsp;'}</div>${resumen(e, d) ? `<div class="l3">${esc(resumen(e, d))}</div>` : ''}
           ${fotos.length ? `<div class="thumbs">${fotos.slice(0, 4).map(u => `<img loading="lazy" src="${esc(u)}" alt="" onerror="this.style.visibility='hidden'">`).join('')}</div>` : ''}</div></div>`; }).join('')}
@@ -2529,6 +2568,7 @@ $('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.r
 
 /* ---------- Arranque ---------- */
 (async function(){
+  document.querySelectorAll('.nico').forEach(n => n.innerHTML = icono(n.dataset.ico, 22));
   const p = leer('periodo'); if(p && [...$('#periodo').options].some(o => o.value === p)){ st.periodo = p; $('#periodo').value = p; }
   llenarMeses();
   pintarTabs();
