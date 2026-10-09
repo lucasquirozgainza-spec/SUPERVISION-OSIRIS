@@ -76,7 +76,7 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
 /* hoja de detalle */
 .sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5);display:none;align-items:flex-end}
 .sheet.on{display:flex}
-.panel{background:var(--card);width:100%;max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;
+.panel{background:var(--card);width:100%;max-height:88vh;max-height:88dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;border-radius:18px 18px 0 0;
   padding:16px 16px calc(env(safe-area-inset-bottom) + 20px)}
 .panel h2{margin:0 0 2px;font-size:19px}
 .panel .sub{color:var(--mute);font-size:13px;margin-bottom:12px}
@@ -93,6 +93,8 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
 .lb .dl{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);background:rgba(255,255,255,.18);color:#fff;text-decoration:none}
 /* ---- v2: navegación inferior, guardias, informe, ajustes ---- */
 [hidden]{display:none !important}
+.sheet{overscroll-behavior:contain}
+body.trabado{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 /* campos de texto: misma altura, borde y alineación en todos lados (iOS incluido) */
 .inp,.field input,.field select,.row select,.row input{box-sizing:border-box;height:46px;border:1px solid var(--line);background-color:var(--card);color:var(--ink);border-radius:12px;padding:0 12px;font:inherit;font-size:16px;margin:0}
 .field input,.field select,.inp{width:100%;display:block}
@@ -373,8 +375,12 @@ function enRango(e){
 }
 
 async function cargarEdificios(){
-  const rows = await api('eventos?select=edificio&order=created_at.desc&limit=2000');
-  const set = [...new Set(rows.map(r => r.edificio || '').filter(e => e.trim() && !ED_OCULTOS.has(e)))].sort((a,b)=>a.localeCompare(b,'es'));
+  /* edificios con movimiento reciente + todos los que tienen configuración (incluye los creados desde la web) */
+  const [rows, cfgs] = await Promise.all([
+    api('eventos?select=edificio&order=created_at.desc&limit=2000'),
+    api('eventos?select=edificio&tipo=eq.Config&order=created_at.desc&limit=2000').catch(() => []),
+  ]);
+  const set = [...new Set([...rows, ...cfgs].map(r => r.edificio || '').filter(e => e.trim() && !ED_OCULTOS.has(e)))].sort((a,b)=>a.localeCompare(b,'es'));
   const sel = $('#edif');
   sel.innerHTML = set.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('') || '<option value="">Sin edificios</option>';
   const pedido = new URLSearchParams(location.search).get('e');
@@ -642,6 +648,22 @@ document.addEventListener('visibilitychange', () => { if(!document.hidden && vis
 let vistaActual = 'mov';
 
 
+/* Con la hoja emergente o la foto abiertas, el fondo queda quieto (en iPhone el
+   deslizamiento movía la página de atrás y no la ventana emergente). */
+(function(){
+  let y = 0, trabado = false;
+  const revisar = () => {
+    const abierto = $('#sheet').classList.contains('on') || $('#lb').classList.contains('on');
+    if(abierto && !trabado){ y = scrollY; document.body.style.top = -y + 'px'; document.body.classList.add('trabado'); trabado = true; }
+    else if(!abierto && trabado){ document.body.classList.remove('trabado'); document.body.style.top = ''; scrollTo(0, y); trabado = false; }
+  };
+  const mo = new MutationObserver(revisar);
+  mo.observe($('#sheet'), {attributes:true, attributeFilter:['class']});
+  mo.observe($('#lb'), {attributes:true, attributeFilter:['class']});
+  /* al abrir otra hoja, empieza desde arriba */
+  new MutationObserver(() => { const p = $('#panel'); if(p) p.scrollTop = 0; }).observe($('#panel'), {childList:true});
+})();
+
 /* ===== Cálculo de horas: copia FIEL de turnos.dart + panel_horas.dart (app v12.x) =====
    Mismas reglas que la app: relevos, tolerancia (minutos completos pasado el margen),
    mes por la hora PROGRAMADA de inicio (diurno del día 1 al nocturno del último día). */
@@ -751,7 +773,7 @@ class ResumenGuardia {
 }
 
 const PanelHoras = {
-  calcular(todos, {desde = null, hasta = null, toleranciaMin = Turnos.tolDef, franqueros = new Set()} = {}){
+  calcular(todos, {desde = null, hasta = null, toleranciaMin = Turnos.tolDef, franqueros = new Set(), unGuardia = false} = {}){
     const tol = toleranciaMin / 60;
     const enPeriodo = t => { const ref = t.progInicio ?? t.inicio; return (!desde || !(ref < desde)) && (!hasta || ref < hasta); };
     const vistos = new Set(), porPuesto = new Map();
@@ -764,7 +786,7 @@ const PanelHoras = {
     const out = [];
     for (const puesto of [...porPuesto.keys()].sort(cmpStr)) {
       const lista = porPuesto.get(puesto).sort(this._orden);
-      this._calcularPuesto(lista, tol, franqueros);
+      this._calcularPuesto(lista, tol, franqueros, unGuardia);
       const p = {puesto, toleranciaMin, guardias: new Map(), turnos: []};
       for (const t of lista) {
         if (!enPeriodo(t)) continue;
@@ -781,7 +803,7 @@ const PanelHoras = {
     const g = cmpStr(a.guardia, b.guardia); return g !== 0 ? g : cmpStr(a.id, b.id);
   },
   _h(a, b){ return minEntre(a, b) / 60; },
-  _calcularPuesto(lista, tol, franqueros = new Set()){
+  _calcularPuesto(lista, tol, franqueros = new Set(), unGuardia = false){
     const franq = t => t.guardId !== null && franqueros.has(t.guardId);
     let ultimo = null, primero = null;
     for (const t of lista) if (t.relevos.length) { primero = t.relevos; break; }
@@ -811,9 +833,9 @@ const PanelHoras = {
           a.notas.push('Relevo con franquero (' + f.guardia + '): no cuenta para horas extras');
           if (f !== a) mejor.notas.push('Franquero: no suma ni resta horas extras');
         } else this._relevo(a, mejor, a.progFin, tol);
-      } else if (!franq(a)) this._finSinRelevo(a, tol);
+      } else if (!franq(a)) this._finSinRelevo(a, tol, unGuardia);
     }
-    for (const b of validos) if (!tomados.has(b) && !franq(b)) this._inicioSinRelevo(b, tol);
+    for (const b of validos) if (!tomados.has(b) && !franq(b)) this._inicioSinRelevo(b, tol, unGuardia);
   },
   /* Relevo entre dos FIJOS: siempre en espejo (+ para uno, − para el otro) */
   _relevo(a, b, p, tol){
@@ -835,18 +857,21 @@ const PanelHoras = {
     }
   },
   /* Sin relevo registrado no hay a quién cargarle la diferencia: no cuenta (queda la nota) */
-  _finSinRelevo(a, tol){
+  _finSinRelevo(a, tol, cuenta = false){
     const d = this._h(a.fin, a.progFin);
+    /* edificio de un solo guardia: se compara con su propio horario */
+    if (cuenta && Math.abs(d) > tol) { a.movimientos.push({programado: a.progFin, real: a.fin, horas: d, motivo: d > 0 ? 'Se quedó después de su hora' : 'Salió antes de su hora'}); return; }
     if (Math.abs(d) > tol) a.notas.push((d > 0 ? 'Salió después' : 'Salió antes') + ' de su hora (' + Turnos.duracion(Math.round(Math.abs(d) * 60)) + ') sin relevo registrado: no cuenta');
   },
-  _inicioSinRelevo(b, tol){
+  _inicioSinRelevo(b, tol, cuenta = false){
     const tarde = this._h(b.inicio, b.progInicio);
+    if (cuenta && tarde > tol) { b.movimientos.push({programado: b.progInicio, real: b.inicio, horas: -tarde, motivo: 'Llegó tarde'}); return; }
     if (tarde > tol) b.notas.push('Entró ' + Turnos.duracion(Math.round(tarde * 60)) + ' tarde sin relevo registrado: no cuenta');
   },
   /* Panel del mes (año, mes 0-11) de UN edificio desde los eventos de la nube */
-  panelMes(eventos, anio, mes, {toleranciaMin = Turnos.tolDef, soloConGuardia = false, ahora, franqueros = new Set()} = {}){
+  panelMes(eventos, anio, mes, {toleranciaMin = Turnos.tolDef, soloConGuardia = false, ahora, franqueros = new Set(), unGuardia = false} = {}){
     const regs = this.desdeEventos(eventos, {soloConGuardia, ahora});
-    return this.calcular(regs, {desde: new Date(anio, mes, 1), hasta: new Date(anio, mes + 1, 1), toleranciaMin, franqueros});
+    return this.calcular(regs, {desde: new Date(anio, mes, 1), hasta: new Date(anio, mes + 1, 1), toleranciaMin, franqueros, unGuardia});
   },
   porGuardia(puestos){
     const out = new Map();
@@ -998,7 +1023,7 @@ async function leerConfig(ed){
     if(m && typeof m === 'object') mod = m;
   }
   const torres = Array.isArray(mod.torres) ? mod.torres.map(x => String(x).trim()).filter(Boolean) : [];
-  return {torres, tolerancia: Turnos.toleranciaDe(mod)};
+  return {torres, tolerancia: Turnos.toleranciaDe(mod), unGuardia: mod.un_guardia === true};
 }
 
 /* Registro de guardias del edificio: el último alta/baja de cada CI manda (igual que la app) */
@@ -1046,7 +1071,7 @@ async function horasDelMes(ed, y, m, registro, cfg){
   const soloCi = registro.size > 0;
   /* franqueros (registrados o dados de baja): no suman ni restan horas extras */
   const franqueros = new Set([...registro.values()].filter(g => g.turno === 'FRANQUERO').map(g => g.ci));
-  const puestos = PanelHoras.panelMes(ev, y, m, {toleranciaMin: cfg.tolerancia, soloConGuardia: soloCi, franqueros});
+  const puestos = PanelHoras.panelMes(ev, y, m, {toleranciaMin: cfg.tolerancia, soloConGuardia: soloCi, franqueros, unGuardia: cfg.unGuardia});
   return PanelHoras.porGuardia(puestos);
 }
 
@@ -1090,7 +1115,7 @@ function pintarGuardias(){
     ${activos.length ? activos.map(card).join('') : '<div class="empty">No hay guardias registrados en este edificio.</div>'}
     ${bajas.length ? `<button class="btn more" id="gBajas">${GU.verBajas ? 'Ocultar' : 'Ver'} dados de baja (${bajas.length})</button>
       ${GU.verBajas ? bajas.map(card).join('') : ''}` : ''}
-    <div class="msg" style="margin-top:14px">Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan. Un turno de 36 h cuenta como día extra, no como horas extras. Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.</div>`;
+    <div class="msg" style="margin-top:14px">${D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.'} Un turno de 36 h cuenta como día extra, no como horas extras. Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.</div>`;
 }
 
 $('#v-gua').addEventListener('click', ev => {
@@ -1515,7 +1540,7 @@ async function generarInforme(){
         didParseCell: c => { if(c.section === 'body' && s.k === 'visitas' && c.column.dataKey === 'devolvio' && c.cell.raw === 'NO'){ c.cell.styles.textColor = [200, 30, 30]; c.cell.styles.fontStyle = 'bold'; } },
       });
       y = doc.lastAutoTable.finalY + 11;
-      if(s.k === 'horas' && cfg) notas.push(`Horas extras solo entre los guardias fijos (diurno y nocturno), en espejo: lo que uno tiene a favor el otro lo tiene en contra (relevos con atraso o salida anticipada). Los franqueros no suman ni restan. Turno de 24 h: sale a la misma hora del día siguiente; turno de 36 h: cuenta como día extra trabajado, no como horas extras. El mes empieza con el diurno del día 1 y termina con el nocturno del último día. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.`);
+      if(s.k === 'horas' && cfg) notas.push(cfg.unGuardia ? `Edificio de un solo guardia: las horas extras se cuentan contra su propio horario de relevo (quedarse después suma; llegar tarde o irse antes resta). Turno de 36 h: cuenta como día extra trabajado. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.` : `Horas extras solo entre los guardias fijos (diurno y nocturno), en espejo: lo que uno tiene a favor el otro lo tiene en contra (relevos con atraso o salida anticipada). Los franqueros no suman ni restan. Turno de 24 h: sale a la misma hora del día siguiente; turno de 36 h: cuenta como día extra trabajado, no como horas extras. El mes empieza con el diurno del día 1 y termina con el nocturno del último día. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.`);
     }
     if(notas.length){
       if(y > H - 25) nuevaPagina();
@@ -1623,6 +1648,7 @@ async function cargarAjustesEd(){
     const sw = (k, t, porDefecto) => `<label class="chk"><input type="checkbox" data-mod="${k}" ${(porDefecto ? M[k] !== false : M[k] === true) ? 'checked' : ''}> ${esc(t)}</label>`;
     const dig = Number.isInteger(+M.tarjeta_digitos) && +M.tarjeta_digitos ? +M.tarjeta_digitos : 10;
     c.innerHTML = `
+      <button class="btn" id="aNuevoEd" style="width:100%;height:46px;margin-bottom:12px">＋ Nuevo edificio</button>
       ${existe ? '' : '<div class="msg">Este edificio todavía no publicó su configuración desde la app. Revisa todo antes de guardar: lo que guardes aquí reemplaza lo que tienen los celulares.</div>'}
       <div class="h2">Módulos que se ven en la app</div>
       <div class="card">${MODULOS.map(([k,t]) => sw(k, t, false)).join('')}</div>
@@ -1631,7 +1657,9 @@ async function cargarAjustesEd(){
         <label class="field"><span>Dígitos de la tarjeta de acceso</span><input id="aDig" type="number" min="3" max="16" value="${dig}" inputmode="numeric"></label></div>
       <div class="h2">Turnos</div>
       <div class="card"><label class="field" style="margin-top:0"><span>Tolerancia de relevo (minutos, 0 a 60)</span><input id="aTol" type="number" min="0" max="60" step="5" value="${Turnos.toleranciaDe(M)}" inputmode="numeric"></label>
-        <div style="font-size:13px;color:var(--mute)">Hasta ese margen no cuenta; pasado el margen se cuentan todos los minutos.</div></div>
+        <div style="font-size:13px;color:var(--mute)">Hasta ese margen no cuenta; pasado el margen se cuentan todos los minutos.</div>
+        <label class="chk"><input type="checkbox" data-mod="un_guardia" ${M.un_guardia === true ? 'checked' : ''}> Un solo guardia (sin relevo)</label>
+        <div style="font-size:13px;color:var(--mute)">Actívalo si el edificio tiene un solo guardia: sus horas extras se cuentan contra su propio horario.</div></div>
       <div class="h2">Bloques / torres</div>
       <div class="card"><div id="aTorres" style="display:flex;flex-wrap:wrap;gap:6px">${torres.map((t,i) => `<button class="tab on" data-torre="${i}">${esc(t)} ✕</button>`).join('') || '<span style="color:var(--mute);font-size:14px">Edificio sin bloques</span>'}</div>
         <div class="row"><input id="aTorreN" class="inp" style="flex:1" placeholder="Nuevo bloque"><button class="btn" id="aTorreAdd" style="height:46px">Agregar</button></div></div>
@@ -1640,6 +1668,39 @@ async function cargarAjustesEd(){
       <div class="msg">Los celulares del edificio aplican estos cambios en 1 a 2 minutos (con internet).</div>`;
     ED.cfg.torres = torres;
   }catch(e){ if(mio === ED.gen) c.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; }
+}
+$('#v-edi').addEventListener('click', e => { if(e.target.id === 'aNuevoEd') formNuevoEdificio(); });
+/* Edificio nuevo: queda en la nube y TODOS los celulares (app y web) lo ven para elegirlo */
+function formNuevoEdificio(){
+  const torres = [];
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>Nuevo edificio</h2><div class="sub">Aparecerá en la app de todos los celulares</div>
+    <label class="field"><span>Nombre del edificio</span><input id="nNom" autocomplete="off" autocapitalize="words"></label>
+    <div class="field"><span>Bloques / torres (si tiene)</span><div id="nTor" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div class="row"><input id="nTorN" class="inp" style="flex:1" placeholder="Ej. Torre 1"><button class="btn" id="nTorAdd" style="height:46px">Agregar</button></div></div>
+    <div class="field"><span>Módulos</span><div class="card" style="margin:0">${MODULOS.map(([k, t]) => `<label class="chk"><input type="checkbox" data-nm="${k}" ${k === 'hospedajes' || k === 'mantenimiento' ? '' : 'checked'}> ${esc(t)}</label>`).join('')}</div></div>
+    <div id="nMsg"></div><button class="btn prim" id="nOk">Crear edificio</button>`;
+  $('#sheet').classList.add('on');
+  const pintarT = () => $('#nTor').innerHTML = torres.map((t, i) => `<button class="tab on" data-nt="${i}">${esc(t)} ✕</button>`).join('');
+  $('#nTor').onclick = ev => { const b = ev.target.closest('[data-nt]'); if(b){ torres.splice(+b.dataset.nt, 1); pintarT(); } };
+  $('#nTorAdd').onclick = () => { const v = $('#nTorN').value.trim(); if(v && !torres.includes(v)) torres.push(v); $('#nTorN').value = ''; pintarT(); };
+  $('#nOk').onclick = async () => {
+    const nombre = $('#nNom').value.trim().replace(/\s+/g, ' ');
+    const existentes = [...$('#edif').options].map(o => o.value.toLowerCase());
+    if(!nombre) return $('#nMsg').innerHTML = '<div class="msg bad">Escribe el nombre.</div>';
+    if(nombre.startsWith('_') || nombre === '*') return $('#nMsg').innerHTML = '<div class="msg bad">Nombre no válido.</div>';
+    if(existentes.includes(nombre.toLowerCase())) return $('#nMsg').innerHTML = '<div class="msg bad">Ya existe un edificio con ese nombre.</div>';
+    const mod = {torres: [...torres], tolerancia_min: 15, tarjeta_digitos: 10};
+    document.querySelectorAll('[data-nm]').forEach(i => mod[i.dataset.nm] = i.checked);
+    $('#nOk').disabled = true;
+    try{
+      await apiEscribir('POST', 'eventos', nuevoEvento('Config', nombre, 'Supervisión', {modulos: JSON.stringify(mod)}));
+      const sel = $('#edif'); const o = document.createElement('option'); o.value = o.textContent = nombre; sel.appendChild(o);
+      [...sel.options].sort((a, b) => a.value.localeCompare(b.value, 'es')).forEach(x => sel.appendChild(x));
+      sel.value = nombre; sel.dispatchEvent(new Event('change'));
+      $('#sheet').classList.remove('on');
+    }catch(x){ $('#nMsg').innerHTML = `<div class="msg bad">No se pudo crear (${esc(x.message)}).</div>`; $('#nOk').disabled = false; }
+  };
 }
 $('#v-edi').addEventListener('click', async e => {
   if(!ED.cfg) return;
@@ -1705,7 +1766,7 @@ async function cargarCelulares(){
     c.innerHTML = `
       ${eq.size ? [...eq.entries()].sort((a,b) => String((a[1].rep.ajustes||{}).bloque||'').localeCompare(String((b[1].rep.ajustes||{}).bloque||''))).map(tarjeta).join('')
         : '<div class="empty">Ningún celular de este edificio reportó todavía sus ajustes.</div>'}
-      ${viejos.length ? `<div class="msg">${viejos.length} celular(es) de este edificio todavía no tienen la app 12.6; cuando la actualicen aparecerán aquí para configurarlos.</div>` : ''}
+      ${viejos.length ? `<div class="msg">${viejos.length} celular(es) de este edificio todavía tienen una versión anterior de la app; cuando la actualicen aparecerán aquí para configurarlos.</div>` : ''}
       <div class="msg">Toca un celular para cambiar sus ajustes: fotos por ronda, cada cuántas horas avisar la ronda, horario de relevo, bloque, uniforme, alarma de candados, aviso de incidentes y más.</div>`;
   }catch(e){ if(mio === ED.gen) c.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; }
 }
@@ -1795,7 +1856,7 @@ function pintarListaEd(clase){
     <div class="card" style="padding:10px 12px">
       <b>${esc(L.t)}</b> · ${D.filas.length} registro${D.filas.length === 1 ? '' : 's'}
       <div style="font-size:12.5px;color:var(--mute);margin-top:2px">${D.existe ? 'Última versión en la nube: ' + esc(D.t.toLocaleString('es',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})) + (D.origen === 'web' ? ' (desde aquí)' : ' (desde un celular)')
-        : 'Todavía no hay datos en la nube: se suben solos cuando un celular con la app 12.6 se conecta, o cárgalos aquí.'}</div>
+        : 'Todavía no hay datos en la nube: se suben solos cuando un celular con la app actualizada se conecta, o cárgalos aquí.'}</div>
       <div class="acts" style="margin-top:10px">
         <button class="btn" id="lNuevo">＋ Agregar</button>
         ${L.excel ? '<button class="btn" id="lImp">Importar Excel</button><button class="btn" id="lExp">Descargar Excel</button>' : ''}
@@ -2432,7 +2493,15 @@ async function pintarAjustes(){
   /* dispositivos por link (la versión más nueva de cada uno) */
   const devsDe = new Map();
   for(const x of devRows){ const d = detalleDe(x); if(!d.token || !d.dev) continue; if(!devsDe.has(d.token)) devsDe.set(d.token, new Map()); const m = devsDe.get(d.token); if(!m.has(d.dev)) m.set(d.dev, {...d, t: fecha(x.created_at)}); }
-  const pendientes = [...devsDe.values()].reduce((a, m) => a + [...m.values()].filter(d => d.estado === 'pendiente').length, 0);
+  /* solicitudes de acceso: solo de links que siguen activos; las de links ya desactivados se limpian solas */
+  const nombreDe = new Map();
+  for(const d of unicosPorToken(links)) nombreDe.set(d.token, {nombre: d.nombre || 'Administrador', clase: 'link', ed: edsDeLink(d).join('|'), url: urlLink(d.token)});
+  for(const d of unicosPorToken(glinks)) nombreDe.set(d.token, {nombre: d.nombre || 'Guardia', clase: 'glink', ed: d.edificio || '', url: urlGuardia(d.token)});
+  const huerfanos = [...devsDe.keys()].filter(tok => !nombreDe.has(tok));
+  for(const tok of huerfanos){ devsDe.delete(tok); apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.linkdev&detalle->>token=eq.' + enc(tok)).catch(() => {}); }
+  const solicitudes = [];
+  for(const [tok, m] of devsDe) for(const d of m.values()) if(d.estado === 'pendiente') solicitudes.push({tok, d, l: nombreDe.get(tok)});
+  const pendientes = solicitudes.length;
   const listaDevs = tok => { const m = devsDe.get(tok); const l = m ? [...m.values()].filter(d => d.estado !== 'bloqueado') : [];
     if(!l.length) return '<div style="font-size:13px;color:var(--mute);margin-top:6px">Aún no se abrió en ningún dispositivo.</div>';
     return l.map(d => `<div class="pres" style="border-top:1px solid var(--line)"><span class="n" style="font-weight:500">${esc(d.equipo || 'Dispositivo')}
@@ -2441,7 +2510,13 @@ async function pintarAjustes(){
         : `<button class="btn" data-a="permitir" data-dev="${esc(d.dev)}" data-eq="${esc(d.equipo || '')}" style="color:var(--ok)">Permitir</button><button class="btn" data-a="quitar" data-dev="${esc(d.dev)}" data-eq="${esc(d.equipo || '')}">Rechazar</button>`}</div>`).join(''); };
   const usados = tok => { const m = devsDe.get(tok); return m ? [...m.values()].filter(d => d.estado === 'ok').length : 0; };
   box.innerHTML = `
-    ${pendientes ? `<div class="msg" style="background:rgba(217,119,6,.15);color:var(--warn);font-weight:700">${pendientes} dispositivo${pendientes === 1 ? '' : 's'} pide${pendientes === 1 ? '' : 'n'} acceso: revisa abajo.</div>` : ''}
+    ${pendientes ? `<div class="h2" style="color:var(--warn)">Piden acceso (${pendientes})</div><div class="card">${solicitudes.map(x => `
+      <div class="lnk" data-tok="${esc(x.tok)}" data-url="${esc(x.l.url)}" data-nom="${esc(x.l.nombre)}" data-ed="${esc(x.l.ed)}" data-clase="${x.l.clase}">
+        <b>${esc(x.d.equipo || 'Dispositivo')}</b>
+        <div style="font-size:13px;color:var(--mute)">Link: ${esc(x.l.nombre)} · pidió ${esc(hace(x.d.t))}</div>
+        <div class="acts" style="margin-top:8px"><button class="btn" data-a="permitir" data-dev="${esc(x.d.dev)}" data-eq="${esc(x.d.equipo || '')}" style="color:var(--ok)">Permitir</button>
+          <button class="btn" data-a="quitar" data-dev="${esc(x.d.dev)}" data-eq="${esc(x.d.equipo || '')}">Rechazar</button></div>
+      </div>`).join('')}</div>` : ''}
     <div class="h2">Links para administradores</div>
     <div class="card">
       <div style="font-size:14px;color:var(--mute);margin-bottom:6px">Cada link muestra <b>solo los movimientos en vivo</b> de los edificios que marques (uno o varios). No ve guardias, informes ni otros edificios. Lo puedes cambiar o desactivar cuando quieras.</div>

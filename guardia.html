@@ -611,7 +611,18 @@ function pRonda(){
   $('#rOk').onclick = async () => {
     if(z.fotos.length < min) return toast('Faltan fotos: ' + z.fotos.length + ' de ' + min, 'var(--bad)');
     ocupado($('#rOk'), true, 'Guardando…');
-    await registrar('Ronda', {fotos: z.fotos.length, ...(v('rO') ? {observaciones: v('rO')} : {})}, {fotos: z.fotos.slice(0, 6), campoFotos: 'fotos_url'});
+    const obs = v('rO'), quien = G.turno ? G.turno.nombre : 'Guardia', ahora = new Date();
+    /* compartir por WhatsApp EN EL MISMO toque (iPhone solo deja abrir "Compartir" así), igual que la app */
+    const texto = (obs ? 'Ronda: ' + obs : 'Ronda sin novedad') + ' - ' + quien + ' - ' + diaHora(ahora) + ' - ' + G.ed + (G.link.bloque ? ' ' + G.link.bloque : '');
+    let compartir = null;
+    try{
+      const files = z.fotos.map((f, i) => new File([f], 'ronda_' + (i + 1) + '.jpg', {type: 'image/jpeg'}));
+      if(navigator.canShare && navigator.canShare({files})) compartir = navigator.share({files, text: texto});
+      else if(navigator.share) compartir = navigator.share({text: texto});
+    }catch(_){ compartir = null; }
+    const guardado = registrar('Ronda', {fotos: z.fotos.length, ...(obs ? {observaciones: obs} : {}), ts: ahora.toISOString()}, {fotos: z.fotos.slice(0, 6), campoFotos: 'fotos_url'});
+    if(compartir) await compartir.catch(() => {});
+    await guardado;
     toast('Ronda guardada', 'var(--ok)'); volver();
   };
 }
