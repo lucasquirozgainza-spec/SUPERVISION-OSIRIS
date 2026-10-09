@@ -1555,7 +1555,7 @@ async function generarInforme(){
 const ED = {sub:'ajustes', gen:0, cfg:null, datos:{}, sucio:{}, filtro:'', editIdx:null};
 const SUBS = [
   ['ajustes','Ajustes'], ['celulares','Celulares'], ['propietarios','Propietarios'], ['residentes','Residentes'],
-  ['vehiculos','Vehículos'], ['contactos','Contactos'], ['normativas','Reglamentos'], ['puntos_control','Puntos de ronda'],
+  ['vehiculos','Vehículos'], ['contactos','Contactos'], ['recurrentes','Recurrentes'], ['normativas','Reglamentos'], ['puntos_control','Puntos de ronda'],
 ];
 const MODULOS = [['visitas','Visitas'],['visitas_recu','Visitas recurrentes'],['hospedajes','Hospedajes'],['rondas','Rondas'],
   ['propietarios','Propietarios'],['vehiculos','Vehículos'],['incidentes','Incidentes'],['encomiendas','Encomiendas'],
@@ -1578,6 +1578,8 @@ const LISTAS = {
     ['nro_parqueo','N° parqueo',['parqueo','garaje','estacionamiento']], ['telefono','Teléfono',['telefono','celular','cel','telf']], ['observaciones','Observaciones',['observ','nota']]]},
   contactos:{t:'Contactos', principal:['nombre','telefono'], excel:true, cols:[['nombre','Nombre',['nombre','contacto','servicio']], ['telefono','Teléfono',['telefono','celular','numero','cel','telf']]]},
   normativas:{t:'Reglamentos y documentos', principal:['nombre'], cols:[['nombre','Nombre',[]], ['url','Archivo',[]]]},
+  recurrentes:{t:'Visitas recurrentes', principal:['nombre','depto'], excel:true, cols:[['nombre','Nombre',['nombre','visita']], ['ci','CI',['ci','carnet','documento']],
+    ['depto','Depto.',['depto','departa','unidad','dpto']], ['motivo','Motivo',['motivo','servicio','trabajo']], ['placa','Placa',['placa']]]},
   puntos_control:{t:'Puntos de ronda (QR)', principal:['nombre'], cols:[['nombre','Nombre',[]], ['codigo','Código QR',[]]]},
 };
 const sinTildes = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -2411,16 +2413,18 @@ function esperarAutorizacion(token, dev, estado){
 }
 
 /* ---------- Ajustes: links de administradores y PIN ---------- */
+function urlGuardia(token){ const u = new URL('guardia.html', location.href); u.search = '?g=' + token; u.hash = ''; return u.toString(); }
 function urlLink(token){ const u = new URL(location.href); u.search = '?a=' + token; u.hash = ''; return u.toString(); }
 async function pintarAjustes(){
   const box = $('#v-cfg');
   box.innerHTML = '<div class="empty">Cargando…</div>';
   let links = [];
-  let devRows = [];
+  let devRows = [], glinks = [];
   try{
-    [links, devRows] = await Promise.all([
+    [links, devRows, glinks] = await Promise.all([
       api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&order=created_at.desc&limit=200'),
       api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.linkdev&order=created_at.desc&limit=1000'),
+      api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.glink&order=created_at.desc&limit=200'),
     ]);
   }
   catch(e){ box.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
@@ -2456,6 +2460,25 @@ async function pintarAjustes(){
         ${listaDevs(d.token)}
         <div class="acts" style="margin-top:8px"><button class="btn" data-a="copiar">Copiar</button><button class="btn" data-a="compartir">Compartir</button><button class="btn" data-a="editar">Editar</button><button class="btn" data-a="borrar" style="color:var(--bad)">Desactivar</button></div>
       </div>`; }).join('') : '<div class="empty" style="padding:14px">Todavía no creaste links.</div>'}</div>
+    <div class="h2">Links para guardias con iPhone</div>
+    <div class="card">
+      <div style="font-size:14px;color:var(--mute);margin-bottom:6px">Versión web de la app para registrar desde un iPhone: turno, visitas, recurrentes, rondas, incidentes, encomiendas y consultas. Queda amarrada al primer celular que la abre.</div>
+      <label class="field"><span>Nombre (ej. iPhone portería Torre 1)</span><input id="gNom" autocomplete="off"></label>
+      <label class="field"><span>Edificio</span><select id="gEd">${eds.map(e => `<option ${e === st.edif ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></label>
+      <label class="field"><span>Bloque / torre (opcional)</span><input id="gBlo" autocomplete="off" placeholder="Ej. Torre 1"></label>
+      <div class="row" style="margin-top:0"><label class="field" style="flex:1;margin:0"><span>Relevo 1</span><input id="gR1" type="time" value="08:00"></label><label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="gR2" type="time" value="20:00"></label></div>
+      <label class="field"><span>Fotos mínimas por ronda</span><select id="gFot">${[1,2,3,4,5,6,8,10].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <div id="gMsg"></div>
+      <button class="btn prim" id="gCrear">Crear link de guardia</button>
+    </div>
+    <div class="card">${glinks.length ? unicosPorToken(glinks).map(d => { const u = urlGuardia(d.token);
+      return `<div class="lnk" data-tok="${esc(d.token)}" data-url="${esc(u)}" data-nom="${esc(d.nombre || '')}" data-ed="${esc(d.edificio || '')}" data-clase="glink">
+        <b>${esc(d.nombre || 'Guardia')}</b>
+        <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px"><span class="badge" style="background:var(--ok)">${esc(d.edificio || '')}${d.bloque ? ' · ' + esc(d.bloque) : ''}</span></div>
+        <div class="u">${esc(u)}</div>
+        ${listaDevs(d.token)}
+        <div class="acts" style="margin-top:8px"><button class="btn" data-a="copiar">Copiar</button><button class="btn" data-a="compartir">Compartir</button><button class="btn" data-a="borrar" style="color:var(--bad)">Desactivar</button></div>
+      </div>`; }).join('') : '<div class="empty" style="padding:14px">Todavía no creaste links de guardia.</div>'}</div>
     <div class="h2">Seguridad</div>
     <div class="card">
       <div class="acts"><button class="btn" id="cPin">Cambiar PIN</button><button class="btn" id="cSalir">Cerrar sesión en este celular</button></div>
@@ -2473,6 +2496,17 @@ $('#v-cfg').addEventListener('click', async ev => {
     catch(e){ $('#lMsg').innerHTML = `<div class="msg bad">No se pudo crear (${esc(e.message)}).</div>`; t.disabled = false; }
     return;
   }
+  if(t.id === 'gCrear'){
+    const nombre = $('#gNom').value.trim(), r1 = $('#gR1').value, r2 = $('#gR2').value;
+    if(!nombre){ $('#gMsg').innerHTML = '<div class="msg bad">Escribe un nombre para el link.</div>'; return; }
+    t.disabled = true;
+    try{
+      await apiEscribir('POST', 'eventos', nuevoEvento('Config', MON, 'Supervisión', {clase:'glink', token: azar(20), nombre, edificio: $('#gEd').value,
+        bloque: $('#gBlo').value.trim(), relevos: [r1, r2].filter(Boolean).join(',') || '08:00,20:00', ronda_fotos: parseInt($('#gFot').value, 10) || 4, cupos: 1}));
+      pintarAjustes();
+    }catch(e){ $('#gMsg').innerHTML = `<div class="msg bad">No se pudo crear (${esc(e.message)}).</div>`; t.disabled = false; }
+    return;
+  }
   if(t.id === 'cSalir'){ guardar('sup', ''); location.reload(); return; }
   if(t.id === 'cPin'){
     const a = prompt('PIN nuevo (4 a 8 números):'); if(a === null) return;
@@ -2486,7 +2520,7 @@ $('#v-cfg').addEventListener('click', async ev => {
   if(t.dataset.a === 'copiar'){
     try{ await navigator.clipboard.writeText(url); t.textContent = 'Copiado ✓'; }catch(_){ prompt('Copia el link:', url); }
   } else if(t.dataset.a === 'compartir'){
-    const texto = `Osiris · Monitoreo en vivo de ${fila.dataset.ed.split('|').join(', ')}: ${url}`;
+    const texto = fila.dataset.clase === 'glink' ? `Osiris · App del guardia (${fila.dataset.ed}): ${url}` : `Osiris · Monitoreo en vivo de ${fila.dataset.ed.split('|').join(', ')}: ${url}`;
     if(navigator.share){ try{ await navigator.share({title:'Osiris · Monitoreo', text:texto}); }catch(_){} }
     else location.href = 'https://wa.me/?text=' + enc(texto);
   } else if(t.dataset.a === 'editar'){
@@ -2499,7 +2533,7 @@ $('#v-cfg').addEventListener('click', async ev => {
   } else if(t.dataset.a === 'borrar'){
     if(!confirm(`¿Desactivar el link de ${fila.dataset.nom || 'este administrador'}? Dejará de funcionar al instante.`)) return;
     try{
-      await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&detalle->>token=eq.' + enc(fila.dataset.tok));
+      await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.' + (fila.dataset.clase === 'glink' ? 'glink' : 'link') + '&detalle->>token=eq.' + enc(fila.dataset.tok));
       await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.linkdev&detalle->>token=eq.' + enc(fila.dataset.tok));
       pintarAjustes();
     }
