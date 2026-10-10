@@ -2473,14 +2473,47 @@ function esperarAutorizacion(token, dev, estado){
   }, 10000);
 }
 
+/* ---------- Opciones del link de guardia: qué módulos y campos ve el guardia ---------- */
+const G_MODS = [['visitas','Visitas'],['visitas_recu','Visitas recurrentes'],['rondas','Rondas'],['incidentes','Incidentes'],['encomiendas','Encomiendas'],['hospedajes','Hospedajes'],['consultas','Consultas (propietarios, vehículos…)']];
+const G_CAMPOS = [['v_tarjeta','Tarjeta de acceso (foto + número)'],['v_carnet','Fotos del carnet (anverso y reverso, con lectura)'],['v_vehiculo','Placa del vehículo'],['v_motivo','Motivo de la visita']];
+/* lo que trae el edificio por defecto (si no hay configuración en la nube, todo encendido como la app) */
+async function opcionesDeEdificio(ed){
+  const {mod, existe} = await leerModulos(ed);
+  const on = k => existe ? mod[k] === true : true;
+  const m = {}, c = {};
+  for(const [k] of G_MODS) m[k] = k === 'consultas' ? (on('propietarios') || on('vehiculos') || on('normativas')) : on(k);
+  for(const [k] of G_CAMPOS) c[k] = mod[k] !== false;
+  return {mod: m, campos: c};
+}
+function htmlOpciones(o){
+  const ck = (g, k, t) => `<label class="chk"><input type="checkbox" data-og="${g}" data-ok="${k}" ${o[g][k] ? 'checked' : ''}> ${esc(t)}</label>`;
+  return `<div style="font-size:13px;font-weight:700;color:var(--mute);margin:4px 0 2px">MÓDULOS</div>${G_MODS.map(([k, t]) => ck('mod', k, t)).join('')}
+    <div style="font-size:13px;font-weight:700;color:var(--mute);margin:12px 0 2px">CAMPOS AL REGISTRAR VISITAS</div>${G_CAMPOS.map(([k, t]) => ck('campos', k, t)).join('')}`;
+}
+function leerOpcionesDe(box){
+  const o = {mod:{}, campos:{}};
+  box.querySelectorAll('input[data-og]').forEach(i => { o[i.dataset.og][i.dataset.ok] = i.checked; });
+  return o;
+}
+async function presetOpciones(){
+  const box = $('#gOpc'); if(!box) return;
+  const ed = $('#gEd').value; box.dataset.ed = ed;
+  box.innerHTML = '<div style="color:var(--mute);font-size:13px">Leyendo el edificio…</div>';
+  let o; try{ o = await opcionesDeEdificio(ed); }catch(_){ o = {mod: Object.fromEntries(G_MODS.map(([k]) => [k, true])), campos: Object.fromEntries(G_CAMPOS.map(([k]) => [k, true]))}; }
+  if(box.dataset.ed !== ed) return;
+  box.innerHTML = htmlOpciones(o);
+}
+
 /* ---------- Ajustes: links de administradores y PIN ---------- */
 function urlGuardia(token){ const u = new URL('guardia.html', location.href); u.search = '?g=' + token; u.hash = ''; return u.toString(); }
 function urlLink(token){ const u = new URL(location.href); u.search = '?a=' + token; u.hash = ''; return u.toString(); }
+let GLINKS = [];
 async function pintarAjustes(){
   const box = $('#v-cfg');
   box.innerHTML = '<div class="empty">Cargando…</div>';
   let links = [];
   let devRows = [], glinks = [];
+  GLINKS = [];
   try{
     [links, devRows, glinks] = await Promise.all([
       api('eventos?select=detalle,created_at&tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&order=created_at.desc&limit=200'),
@@ -2489,6 +2522,7 @@ async function pintarAjustes(){
     ]);
   }
   catch(e){ box.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
+  GLINKS = glinks;
   const eds = [...$('#edif').options].map(o => o.value).filter(Boolean);
   /* dispositivos por link (la versión más nueva de cada uno) */
   const devsDe = new Map();
@@ -2543,22 +2577,26 @@ async function pintarAjustes(){
       <label class="field"><span>Bloque / torre (opcional)</span><input id="gBlo" autocomplete="off" placeholder="Ej. Torre 1"></label>
       <div class="row" style="margin-top:0"><label class="field" style="flex:1;margin:0"><span>Relevo 1</span><input id="gR1" type="time" value="08:00"></label><label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="gR2" type="time" value="20:00"></label></div>
       <label class="field"><span>Fotos mínimas por ronda</span><select id="gFot">${[1,2,3,4,5,6,8,10].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <div class="field"><span>Qué podrá usar el guardia (viene marcado según el edificio)</span><div class="card" id="gOpc" style="margin:0"></div></div>
       <div id="gMsg"></div>
       <button class="btn prim" id="gCrear">Crear link de guardia</button>
     </div>
     <div class="card">${glinks.length ? unicosPorToken(glinks).map(d => { const u = urlGuardia(d.token);
+      const om = d.opciones && d.opciones.mod ? G_MODS.filter(([k]) => d.opciones.mod[k]).map(([, t]) => t.split(' (')[0]) : null;
       return `<div class="lnk" data-tok="${esc(d.token)}" data-url="${esc(u)}" data-nom="${esc(d.nombre || '')}" data-ed="${esc(d.edificio || '')}" data-clase="glink">
         <b>${esc(d.nombre || 'Guardia')}</b>
         <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px"><span class="badge" style="background:var(--ok)">${esc(d.edificio || '')}${d.bloque ? ' · ' + esc(d.bloque) : ''}</span></div>
+        ${om ? `<div style="font-size:13px;color:var(--mute);margin-top:4px">${esc(om.join(' · ') || 'Solo turno')}</div>` : ''}
         <div class="u">${esc(u)}</div>
         ${listaDevs(d.token)}
-        <div class="acts" style="margin-top:8px"><button class="btn" data-a="copiar">Copiar</button><button class="btn" data-a="compartir">Compartir</button><button class="btn" data-a="borrar" style="color:var(--bad)">Desactivar</button></div>
+        <div class="acts" style="margin-top:8px"><button class="btn" data-a="copiar">Copiar</button><button class="btn" data-a="compartir">Compartir</button><button class="btn" data-a="geditar">Editar</button><button class="btn" data-a="borrar" style="color:var(--bad)">Desactivar</button></div>
       </div>`; }).join('') : '<div class="empty" style="padding:14px">Todavía no creaste links de guardia.</div>'}</div>
     <div class="h2">Seguridad</div>
     <div class="card">
       <div class="acts"><button class="btn" id="cPin">Cambiar PIN</button><button class="btn" id="cSalir">Cerrar sesión en este celular</button></div>
     </div>
     <div class="msg">Los links bloquean la pantalla en su edificio, pero como la app usa la clave pública de Supabase, alguien con conocimientos técnicos podría leer otros datos. Compártelos solo con personas de confianza.</div>`;
+  if($('#gEd')){ $('#gEd').onchange = presetOpciones; presetOpciones(); }
 }
 $('#v-cfg').addEventListener('click', async ev => {
   const t = ev.target;
@@ -2577,7 +2615,7 @@ $('#v-cfg').addEventListener('click', async ev => {
     t.disabled = true;
     try{
       await apiEscribir('POST', 'eventos', nuevoEvento('Config', MON, 'Supervisión', {clase:'glink', token: azar(20), nombre, edificio: $('#gEd').value,
-        bloque: $('#gBlo').value.trim(), relevos: [r1, r2].filter(Boolean).join(',') || '08:00,20:00', ronda_fotos: parseInt($('#gFot').value, 10) || 4, cupos: 1}));
+        bloque: $('#gBlo').value.trim(), relevos: [r1, r2].filter(Boolean).join(',') || '08:00,20:00', ronda_fotos: parseInt($('#gFot').value, 10) || 4, cupos: 1, opciones: leerOpcionesDe($('#gOpc'))}));
       pintarAjustes();
     }catch(e){ $('#gMsg').innerHTML = `<div class="msg bad">No se pudo crear (${esc(e.message)}).</div>`; t.disabled = false; }
     return;
@@ -2598,6 +2636,8 @@ $('#v-cfg').addEventListener('click', async ev => {
     const texto = fila.dataset.clase === 'glink' ? `Osiris · App del guardia (${fila.dataset.ed}): ${url}` : `Osiris · Monitoreo en vivo de ${fila.dataset.ed.split('|').join(', ')}: ${url}`;
     if(navigator.share){ try{ await navigator.share({title:'Osiris · Monitoreo', text:texto}); }catch(_){} }
     else location.href = 'https://wa.me/?text=' + enc(texto);
+  } else if(t.dataset.a === 'geditar'){
+    const d = unicosPorToken(GLINKS).find(x => x.token === fila.dataset.tok); if(d) editarGlink(d);
   } else if(t.dataset.a === 'editar'){
     editarLink(fila.dataset.tok, fila.dataset.nom, fila.dataset.ed.split('|').filter(Boolean), parseInt(fila.dataset.cupos, 10) || 2);
   } else if(t.dataset.a === 'permitir' || t.dataset.a === 'quitar'){
@@ -2643,6 +2683,36 @@ function editarLink(token, nombre, actuales, cupos){
       await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.link&detalle->>token=eq.' + enc(token) + '&detalle->>uid=neq.' + enc(ev.detalle.uid));
       $('#sheet').classList.remove('on'); pintarAjustes();
     }catch(x){ $('#eMsg').innerHTML = `<div class="msg bad">No se pudo guardar (${esc(x.message)}).</div>`; $('#eOk').disabled = false; }
+  };
+}
+
+/* Editar un link de guardia sin cambiar el link: nombre, bloque, relevos, fotos y qué puede usar */
+async function editarGlink(d){
+  let o = d.opciones && d.opciones.mod ? {mod:{...d.opciones.mod}, campos:{...(d.opciones.campos || {})}} : null;
+  if(!o){ try{ o = await opcionesDeEdificio(d.edificio); }catch(_){ o = {mod:{}, campos:{}}; } }
+  for(const [k] of G_CAMPOS) if(!(k in o.campos)) o.campos[k] = true;
+  const [r1, r2] = String(d.relevos || '08:00,20:00').split(',');
+  const fot = parseInt(d.ronda_fotos, 10) || 4;
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>${esc(d.nombre || 'Guardia')}</h2><div class="sub">${esc(d.edificio || '')} · el link no cambia</div>
+    <label class="field"><span>Nombre</span><input id="xNom" value="${esc(d.nombre || '')}"></label>
+    <label class="field"><span>Bloque / torre (opcional)</span><input id="xBlo" value="${esc(d.bloque || '')}"></label>
+    <div class="row" style="margin-top:0"><label class="field" style="flex:1;margin:0"><span>Relevo 1</span><input id="xR1" type="time" value="${esc(r1 || '')}"></label><label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="xR2" type="time" value="${esc(r2 || '')}"></label></div>
+    <label class="field"><span>Fotos mínimas por ronda</span><select id="xFot">${[1,2,3,4,5,6,8,10].map(n => `<option ${n === fot ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+    <div class="card" id="xOpc">${htmlOpciones(o)}</div>
+    <div id="xMsg"></div><button class="btn prim" id="xOk">Guardar</button>`;
+  $('#sheet').classList.add('on');
+  $('#xOk').onclick = async () => {
+    $('#xOk').disabled = true;
+    try{
+      const nd = {...d, clase:'glink', nombre: $('#xNom').value.trim() || d.nombre, bloque: $('#xBlo').value.trim(),
+        relevos: [$('#xR1').value, $('#xR2').value].filter(Boolean).join(',') || '08:00,20:00', ronda_fotos: parseInt($('#xFot').value, 10) || 4, opciones: leerOpcionesDe($('#xOpc'))};
+      delete nd.uid; delete nd.ts;
+      const ev = nuevoEvento('Config', MON, 'Supervisión', nd);
+      await apiEscribir('POST', 'eventos', ev);
+      await apiEscribir('DELETE', 'eventos?tipo=eq.Config&edificio=eq.' + MON + '&detalle->>clase=eq.glink&detalle->>token=eq.' + enc(d.token) + '&detalle->>uid=neq.' + enc(ev.detalle.uid));
+      $('#sheet').classList.remove('on'); pintarAjustes();
+    }catch(x){ $('#xMsg').innerHTML = `<div class="msg bad">No se pudo guardar (${esc(x.message)}).</div>`; $('#xOk').disabled = false; }
   };
 }
 
