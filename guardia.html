@@ -104,6 +104,17 @@ body.trabado{overflow:hidden;position:fixed;left:0;right:0}
 #camDisp:active{background:#fff}
 #camTh{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 118px);display:flex;gap:6px;overflow-x:auto}
 #camTh img{width:52px;height:52px;object-fit:cover;border-radius:8px;border:2px solid #fff;flex:0 0 auto}
+#camGuia{position:absolute;left:6%;right:6%;top:46%;transform:translateY(-50%);aspect-ratio:1.586;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);pointer-events:none}
+#camGuia span{position:absolute;left:0;right:0;top:calc(100% + 14px);text-align:center;color:#fff;font-weight:700;font-size:15px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.qchips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.qchips button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;height:40px;padding:0 16px;font:inherit;font-weight:700}
+.qchips button.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.qchips button.on.otro{background:var(--violet);border-color:var(--violet)}
+.cto{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 12px;font:inherit;margin-top:8px}
+.cto .t{flex:1;min-width:0}.cto b{display:block}.cto span{display:block;font-size:13px;color:var(--mute)}
+.cto i{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex:0 0 22px}
+.cto.on{border-color:var(--ok);background:rgba(22,163,74,.08)}.cto.on i{border:7px solid var(--ok)}
+.ocrst details{margin-top:4px}.ocrst pre{white-space:pre-wrap;font-size:11px;background:var(--chip);padding:8px;border-radius:8px;max-height:200px;overflow:auto}
 #camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
 </style>
 </head>
@@ -121,6 +132,7 @@ body.trabado{overflow:hidden;position:fixed;left:0;right:0}
 <input type="file" id="camaraF" accept="image/*" capture="user" hidden>
 <div id="cam" hidden>
   <video id="camV" playsinline autoplay muted></video>
+  <div id="camGuia" hidden><span id="camGuiaT"></span></div>
   <div id="camFlash"></div>
   <div class="camTop"><b id="camT">Foto</b><span class="n" id="camN"></span></div>
   <div id="camTh"></div>
@@ -265,7 +277,7 @@ const OCR = (() => {
   }
   const util = t => (t.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}/g) || []).length >= 8 || !!(ciMrz(t) || ciEtiqueta(t) || ciSuelto(t) || nombreMrz(t) || nombreEtiquetas(t) || nombreAntiguo(t));
   function parseDosLados(frente, reverso){
-    const ci = ciMrz(frente) || ciMrz(reverso) || ciEtiqueta(frente) || ciSuelto(frente);
+    const ci = ciMrz(frente) || ciMrz(reverso) || ciEtiqueta(frente) || ciEtiqueta(reverso) || ciSuelto(frente);
     const nombre = nombreMrz(frente) || nombreMrz(reverso) || nombreEtiquetas(frente) || nombreAntiguo(reverso) || nombreAntiguo(frente) || nombreEtiquetas(reverso);
     return {ci, nombre};
   }
@@ -288,36 +300,63 @@ const OCR = (() => {
     })().catch(e => { cargando = null; throw e; });
     return cargando;
   }
-  /* imagen preparada para leer: gris, contraste y girada si hace falta */
+  /* imagen preparada para leer: gris con contraste estirado (a mano: Safari no soporta ctx.filter) y girada si hace falta */
   async function preparar(blob, grados = 0){
     const url = URL.createObjectURL(blob);
     try{
-      const img = await new Promise((s, m) => { const i = new Image(); i.onload = () => s(i); i.onerror = m; i.src = url; });
-      const k = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
+      const img = await new Promise((s, m) => { const i = new Image(); i.onload = () => s(i); i.onerror = () => m(new Error('foto ilegible')); i.src = url; });
+      const lado = Math.max(img.naturalWidth, img.naturalHeight);
+      const k = lado > 2000 ? 2000 / lado : lado < 1400 ? 1400 / lado : 1;
       const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
       const c = document.createElement('canvas'); const rot = grados % 180 !== 0;
       c.width = rot ? h : w; c.height = rot ? w : h;
-      const x = c.getContext('2d');
+      const x = c.getContext('2d', {willReadFrequently: true});
+      x.imageSmoothingQuality = 'high';
       x.translate(c.width / 2, c.height / 2); x.rotate(grados * Math.PI / 180);
-      x.filter = 'grayscale(1) contrast(1.35)';
       x.drawImage(img, -w / 2, -h / 2, w, h);
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      const d = x.getImageData(0, 0, c.width, c.height), p = d.data, hist = new Uint32Array(256), n = p.length / 4;
+      for(let i = 0; i < p.length; i += 4){ const g = (p[i] * 77 + p[i + 1] * 150 + p[i + 2] * 29) >> 8; p[i] = g; hist[g]++; }
+      let lo = 0, hi = 255, acc = 0;
+      for(; lo < 255; lo++){ acc += hist[lo]; if(acc > n * 0.02) break; }
+      acc = 0; for(; hi > 0; hi--){ acc += hist[hi]; if(acc > n * 0.02) break; }
+      const r = Math.max(1, hi - lo);
+      for(let i = 0; i < p.length; i += 4){ let g = (p[i] - lo) * 255 / r; g = g < 0 ? 0 : g > 255 ? 255 : g; p[i] = p[i + 1] = p[i + 2] = g; }
+      x.putImageData(d, 0, 0);
       return c;
     } finally { URL.revokeObjectURL(url); }
   }
-  async function texto(blob, grados = 0){
+  async function texto(blob, grados = 0, psm = '3'){
     const w = await motor();
+    await w.setParameters({tessedit_pageseg_mode: psm});
     const r = await w.recognize(await preparar(blob, grados));
     return (r && r.data && r.data.text) || '';
   }
-  async function textoUtil(blob){
-    const t = await texto(blob, 0); if(util(t)) return t;
-    for(const g of [90, 270]){ const t2 = await texto(blob, g); if(util(t2)) return t2; }
-    return t;
+  const datosDe = t => !!(ciMrz(t) || ciEtiqueta(t) || nombreMrz(t) || nombreEtiquetas(t) || nombreAntiguo(t));
+  /* un lado del carnet: normal; si no sale nada útil, como texto suelto; luego girado */
+  async function lado(blob){
+    const t = await texto(blob, 0, '3'); if(datosDe(t)) return t;
+    const t2 = await texto(blob, 0, '11'); if(datosDe(t2)) return t + '\n' + t2;
+    if(util(t) || util(t2)) return t + '\n' + t2;
+    for(const g of [90, 270]){ const t3 = await texto(blob, g, '3'); if(util(t3)) return t3; }
+    return t + '\n' + t2;
   }
+  let fila = Promise.resolve();
+  const enFila = fn => { const p = fila.then(fn, fn); fila = p.catch(() => {}); return p; };
   return {
     parseDosLados, numeroTarjeta, precargar: () => motor().catch(() => null),
-    async carnet(frente, reverso){ const a = await textoUtil(frente); const b = reverso ? await textoUtil(reverso) : ''; return parseDosLados(a, b); },
-    async tarjeta(blob, digitos){ let n = numeroTarjeta(await texto(blob, 0), digitos); if(!n) n = numeroTarjeta(await texto(blob, 90), digitos); return n; },
+    carnet: (frente, reverso) => enFila(async () => {
+      const a = await lado(frente), b = reverso ? await lado(reverso) : '';
+      /* por si sacaron primero el reverso: se prueba también al revés */
+      const r1 = parseDosLados(a, b), r2 = b ? parseDosLados(b, a) : {};
+      return {ci: r1.ci || r2.ci || null, nombre: r1.nombre || r2.nombre || null, textos: [a, b].filter(Boolean)};
+    }),
+    tarjeta: (blob, digitos) => enFila(async () => {
+      let n = numeroTarjeta(await texto(blob, 0, '3'), digitos);
+      if(!n) n = numeroTarjeta(await texto(blob, 0, '11'), digitos);
+      if(!n) n = numeroTarjeta(await texto(blob, 90, '3'), digitos);
+      return n;
+    }),
   };
 })();
 if(typeof module !== 'undefined') module.exports = {OCR};
@@ -374,6 +413,7 @@ const ICONOS = {
   reloj:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   cama:'<path d="M2 20V6M2 16h20M22 20v-6a3 3 0 0 0-3-3h-9v5"/><circle cx="6" cy="12" r="2"/>',
   mas:'<path d="M12 5v14M5 12h14"/>',
+  whatsapp:'<path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z"/>',
   camara:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
 };
 const icono = (k, t = 22) => `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[k] || ''}</svg>`;
@@ -438,14 +478,14 @@ function tx(modo, fn){
 const colaTodos = () => DBQ ? tx('readonly', s => s.getAll()) : Promise.resolve(MEM);
 const MEM = [];
 /* Registra un evento con el mismo formato de la app; las fotos se suben antes de enviarlo */
-async function registrar(tipo, detalle, {fotos = [], campoFotos = 'foto_url', guardia} = {}){
+async function registrar(tipo, detalle, {fotos = [], campoFotos = 'foto_url', guardia, rutas} = {}){
   const uid = 'web_' + G.devId + '_' + Date.now() + '_' + azar(4);
   const det = {...detalle, uid, ts: detalle.ts || new Date().toISOString()};
   if(!['Guardia','GuardiaBaja','Config'].includes(tipo)){
     if(G.turno && G.turno.ci && !det.guard_ci) det.guard_ci = G.turno.ci;
     if(G.link.bloque) det.bloque = G.link.bloque;
   }
-  const item = {tipo, edificio:G.ed, guardia: guardia || (G.turno ? G.turno.nombre : 'Sin turno'), detalle:det, fotos, urls:[], campoFotos, intentos:0};
+  const item = {tipo, edificio:G.ed, guardia: guardia || (G.turno ? G.turno.nombre : 'Sin turno'), detalle:det, fotos, urls:[], campoFotos, intentos:0, ...(rutas ? {rutas} : {})};
   if(DBQ) await tx('readwrite', s => s.add(item)); else MEM.push(item);
   procesarCola();
   return uid;
@@ -465,7 +505,7 @@ async function procesarCola(){
         it.intentos++;
         while(it.urls.length < it.fotos.length){
           const i = it.urls.length;
-          const ruta = edSeguro() + '/' + Date.now() + '_' + G.devId + '_' + i + '.jpg';
+          const ruta = (it.rutas && it.rutas[i]) || (edSeguro() + '/' + Date.now() + '_' + G.devId + '_' + i + '.jpg');
           const r = await fetch(SB_URL + '/storage/v1/object/osiris/' + ruta, {method:'POST', headers:{apikey:SB_KEY, 'Content-Type':'image/jpeg', 'x-upsert':'true'}, body: it.fotos[i]});
           if(!r.ok) throw Object.assign(new Error('foto ' + r.status), {status: r.status});
           it.urls.push(SB_URL + '/storage/v1/object/public/osiris/' + ruta);
@@ -624,7 +664,7 @@ $('#main').addEventListener('click', e => {
 /* ---------- Componente: fotos ---------- */
 /* Cámara dentro de la página: se toman varias fotos seguidas sin salir (si el
    navegador no deja usarla, se usa la cámara del sistema de a una). */
-async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo = 'Foto'} = {}){
+async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo = 'Foto', guia = ''} = {}){
   let stream = null;
   try{
     stream = await navigator.mediaDevices.getUserMedia({audio: false,
@@ -641,6 +681,7 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
   return new Promise(listo => {
     const fotos = [], cam = $('#cam'), video = $('#camV');
     cam.classList.toggle('selfie', frontal); cam.hidden = false; document.body.classList.add('trabado');
+    $('#camGuia').hidden = !guia; $('#camGuiaT').textContent = guia ? 'Encuadra ' + (guia === 'tarjeta' ? 'la tarjeta' : 'el documento') + ' dentro del marco' : '';
     video.srcObject = stream; video.play().catch(() => {});
     const pintarC = () => {
       $('#camT').textContent = etiquetas[fotos.length] || titulo;
@@ -652,9 +693,22 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
     $('#camX').onclick = cerrar; $('#camOk').onclick = cerrar;
     $('#camDisp').onclick = async () => {
       const w = video.videoWidth, h = video.videoHeight; if(!w) return;
-      const k = Math.min(1, 1920 / Math.max(w, h)), c = document.createElement('canvas');
-      c.width = Math.round(w * k); c.height = Math.round(h * k);
-      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      const c = document.createElement('canvas');
+      if(guia){
+        /* solo lo que está dentro del marco (con un poco de margen): el lector lee mucho mejor */
+        const vr = video.getBoundingClientRect(), gr = $('#camGuia').getBoundingClientRect();
+        const s = Math.max(vr.width / w, vr.height / h), ox = (vr.width - w * s) / 2, oy = (vr.height - h * s) / 2;
+        const mx = gr.width * 0.06, my = gr.height * 0.08;
+        let sx = (gr.left - vr.left - mx - ox) / s, sy = (gr.top - vr.top - my - oy) / s, sw = (gr.width + 2 * mx) / s, sh = (gr.height + 2 * my) / s;
+        sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(w - sx, sw); sh = Math.min(h - sy, sh);
+        const k = Math.min(1800, Math.max(1400, sw)) / sw;
+        c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+        c.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      } else {
+        const k = Math.min(1, 1920 / Math.max(w, h));
+        c.width = Math.round(w * k); c.height = Math.round(h * k);
+        c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      }
       const f = $('#camFlash'); f.style.opacity = .8; setTimeout(() => f.style.opacity = 0, 120);
       const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
       if(b){ fotos.push(b); if(navigator.vibrate) navigator.vibrate(30); }
@@ -664,7 +718,7 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
     pintarC();
   });
 }
-function zonaFotos(id, {min = 0, max = 10, frontal = false, texto = 'Tomar foto', etiquetas = [], alCambiar} = {}){
+function zonaFotos(id, {min = 0, max = 10, frontal = false, texto = 'Tomar foto', etiquetas = [], alCambiar, guia = ''} = {}){
   const z = {id, fotos: [], min, max, frontal};
   z.pintar = () => {
     const el = $('#' + id); if(!el) return;
@@ -674,7 +728,7 @@ function zonaFotos(id, {min = 0, max = 10, frontal = false, texto = 'Tomar foto'
     el.onclick = async ev => {
       const q = ev.target.closest('[data-q]'); if(q){ z.fotos.splice(+q.dataset.q, 1); z.pintar(); if(alCambiar) alCambiar(z); return; }
       if(ev.target.closest('[data-add]')){
-        const nuevas = await camara({min: Math.max(1, min - z.fotos.length), max: max - z.fotos.length, frontal, etiquetas: etiquetas.slice(z.fotos.length), titulo: texto});
+        const nuevas = await camara({min: Math.max(1, min - z.fotos.length), max: max - z.fotos.length, frontal, etiquetas: etiquetas.slice(z.fotos.length), titulo: texto, guia});
         if(nuevas.length){ z.fotos.push(...nuevas); z.pintar(); if(alCambiar) alCambiar(z); }
       }
     };
@@ -779,23 +833,28 @@ function pVisitas(tab = 'nueva'){
     <div class="field"><span>CI / carnet</span><input id="vCi" autocomplete="off" inputmode="text"></div>
     <div class="field"><span>Departamento que visita *</span><input id="vD" autocomplete="off"></div>
     <div class="field"><span>Autoriza</span><input id="vA" autocomplete="off"></div>
-    ${campo('v_motivo') ? '<div class="field"><span>Motivo</span><input id="vM" autocomplete="off"></div>' : ''}
+    ${campo('v_motivo') ? `<div class="field"><span>Motivo</span><div class="qchips" id="vMq">${['Visita','Técnico','Limpieza','Otro'].map(m => `<button type="button" data-m="${m}" class="${m === 'Otro' ? 'otro' : ''}">${m}</button>`).join('')}</div><input id="vM" autocomplete="off" placeholder="Toca una opción o escribe" hidden></div>` : ''}
     ${campo('v_vehiculo') ? '<div class="field"><span>Placa del vehículo</span><input id="vP" autocomplete="off" autocapitalize="characters"></div>' : ''}
     ${campo('v_tarjeta') ? `<div class="field"><span>Tarjeta de acceso entregada</span><div class="zf" id="vTF"></div><div class="ocrst" id="vTOcr"></div></div>
       <div class="field"><span>N° de tarjeta (${dig} dígitos)</span><input id="vT" inputmode="numeric" maxlength="${dig}" autocomplete="off"></div>` : ''}
     <div class="field"><span>Observaciones</span><textarea id="vO" placeholder="Opcional"></textarea></div>
     <button class="btn prim" id="vOk">Registrar ingreso</button></div>`;
   /* carnet: anverso y reverso seguidos; se leen nombre y número solos (se pueden corregir) */
-  const car = campo('v_carnet') ? zonaFotos('vCar', {max: 2, min: 2, texto: 'Fotos del carnet', etiquetas: ['Carnet: ANVERSO', 'Carnet: REVERSO'],
+  const car = campo('v_carnet') ? zonaFotos('vCar', {max: 2, min: 2, texto: 'Fotos del carnet', etiquetas: ['Carnet: ANVERSO', 'Carnet: REVERSO'], guia: 'carnet',
     alCambiar: z => leerCarnet(z.fotos, 'vOcr', 'vN', 'vCi')}) : null; if(car) car.pintar();
-  const tf = campo('v_tarjeta') ? zonaFotos('vTF', {max: 1, texto: 'Foto de la tarjeta', etiquetas: ['Tarjeta de acceso'],
+  const tf = campo('v_tarjeta') ? zonaFotos('vTF', {max: 1, texto: 'Foto de la tarjeta', etiquetas: ['Tarjeta de acceso'], guia: 'tarjeta',
     alCambiar: z => leerTarjeta(z.fotos[0], 'vTOcr', 'vT')}) : null; if(tf) tf.pintar();
   if(car || tf) OCR.precargar();
+  /* motivo con un toque: Visita, Técnico, Limpieza; Otro abre el campo para escribir */
+  if($('#vMq')) $('#vMq').onclick = e => { const b = e.target.closest('[data-m]'); if(!b) return;
+    [...$('#vMq').children].forEach(x => x.classList.toggle('on', x === b));
+    const otro = b.dataset.m === 'Otro', i = $('#vM'); i.hidden = !otro; i.value = otro ? '' : b.dataset.m; if(otro) i.focus(); };
   $('#vOk').onclick = async () => {
     const nombre = v('vN'), depto = v('vD'), tarjeta = v('vT');
     if(!nombre) return toast('Escribe el nombre', 'var(--bad)');
     if(!depto) return toast('Escribe el departamento', 'var(--bad)');
     if(tarjeta && tarjeta.length !== dig) return toast('La tarjeta debe tener ' + dig + ' dígitos', 'var(--bad)');
+    if($('#vMq') && $('#vMq .on') && $('#vMq .on').dataset.m === 'Otro' && !v('vM')) return toast('Escribe el motivo', 'var(--bad)');
     ocupado($('#vOk'), true, 'Registrando…');
     const fotos = [...(car ? car.fotos : []), ...(tf ? tf.fotos : [])];
     await registrar('Visita', {ref: 'web_' + G.devId + '_v' + Date.now(), nombre, ci: v('vCi'), depto, autoriza: v('vA'), placa: v('vP'), tarjeta, motivo: v('vM'),
@@ -809,16 +868,20 @@ let ocrSeq = 0;
 async function leerCarnet(fotos, idEst, idNom, idCi){
   const est = $('#' + idEst); if(!est || !fotos.length) { if(est) est.textContent = ''; return; }
   const mio = ++ocrSeq;
-  est.className = 'ocrst'; est.textContent = 'Leyendo el carnet…';
+  est.className = 'ocrst'; est.textContent = fotos.length < 2 ? 'Leyendo el anverso… (falta el reverso)' : 'Leyendo el carnet…';
   try{
     const r = await OCR.carnet(fotos[0], fotos[1]);
     if(mio !== ocrSeq || !$('#' + idEst)) return;
     const n = $('#' + idNom), c = $('#' + idCi);
-    if(r.nombre && n && !n.value.trim()) n.value = r.nombre;
-    if(r.ci && c && !c.value.trim()) c.value = r.ci;
-    est.className = 'ocrst' + (r.nombre || r.ci ? ' ok' : '');
-    est.textContent = r.nombre || r.ci ? 'Leído del carnet: ' + [r.nombre, r.ci ? 'CI ' + r.ci : ''].filter(Boolean).join(' · ') + '. Revisa que esté bien.' : 'No se pudo leer el carnet: escribe los datos.';
-  }catch(_){ if(mio === ocrSeq && $('#' + idEst)) est.textContent = 'Sin lectura automática (revisa el internet): escribe los datos.'; }
+    /* lo leído se escribe en los campos (el guardia lo puede corregir) */
+    if(r.nombre && n){ n.value = r.nombre; n.dispatchEvent(new Event('input')); }
+    if(r.ci && c){ c.value = r.ci; c.dispatchEvent(new Event('input')); }
+    est.className = 'ocrst' + (r.nombre && r.ci ? ' ok' : '');
+    const falta = [!r.nombre ? 'el nombre' : '', !r.ci ? 'el número' : ''].filter(Boolean).join(' ni ');
+    est.innerHTML = esc(r.nombre || r.ci ? 'Leído: ' + [r.nombre, r.ci ? 'CI ' + r.ci : ''].filter(Boolean).join(' · ') + (falta ? '. No se leyó ' + falta + ': escríbelo.' : '. Revisa que esté bien.')
+      : 'No se pudo leer el carnet: escribe los datos o saca otra foto más cerca y sin reflejo.')
+      + `<details><summary>Ver lo que leyó</summary><pre>${esc((r.textos || []).join('\n—————\n') || '(nada)')}</pre></details>`;
+  }catch(e){ if(mio === ocrSeq && $('#' + idEst)) est.textContent = 'Sin lectura automática (' + ((e && e.message) || 'error') + '): escribe los datos.'; }
 }
 async function leerTarjeta(foto, idEst, idNum){
   const est = $('#' + idEst); if(!est) return;
@@ -892,7 +955,7 @@ async function pRecurrentes(){
     /* ingreso: con tarjeta si el edificio las usa */
     let tarjeta = '', fotos = [];
     if(campo('v_tarjeta') && confirm('¿Le entregas una tarjeta de acceso a ' + x.nombre + '?')){
-      fotos = await camara({max: 1, titulo: 'Tarjeta de acceso'});
+      fotos = await camara({max: 1, titulo: 'Tarjeta de acceso', guia: 'tarjeta'});
       let leido = '';
       if(fotos.length){ toast('Leyendo el número…'); try{ leido = await OCR.tarjeta(fotos[0], digitos()) || ''; }catch(_){} }
       const r = prompt('N° de la tarjeta (' + digitos() + ' dígitos):' + (leido ? '\nLeído de la foto, revisa que esté bien.' : ''), leido);
@@ -919,7 +982,7 @@ function pNuevoRecurrente(){
     ${campo('v_vehiculo') ? '<div class="field"><span>Placa</span><input id="nrP" autocomplete="off" autocapitalize="characters"></div>' : ''}
     <label class="chk"><input type="checkbox" id="nrYa" checked> Marcar su ingreso ahora</label>
     <button class="btn prim" id="nrOk">Guardar</button></div>`;
-  const car = zonaFotos('nrCar', {max: 2, min: 2, texto: 'Fotos del carnet', etiquetas: ['Carnet: ANVERSO', 'Carnet: REVERSO'], alCambiar: z => leerCarnet(z.fotos, 'nrOcr', 'nrN', 'nrCi')});
+  const car = zonaFotos('nrCar', {max: 2, min: 2, texto: 'Fotos del carnet', etiquetas: ['Carnet: ANVERSO', 'Carnet: REVERSO'], guia: 'carnet', alCambiar: z => leerCarnet(z.fotos, 'nrOcr', 'nrN', 'nrCi')});
   car.pintar();
   $('#nrOk').onclick = async () => {
     const nombre = v('nrN'), depto = v('nrD');
@@ -960,7 +1023,7 @@ function pHospedajes(tab = 'nuevo'){
     ${campo('v_vehiculo') ? '<div class="field"><span>Placa</span><input id="hPl" autocomplete="off" autocapitalize="characters"></div>' : ''}
     <div class="field"><span>Observaciones</span><textarea id="hO" placeholder="Opcional"></textarea></div>
     <button class="btn prim" id="hOk">Registrar hospedaje</button></div>`;
-  const z = zonaFotos('hDoc', {max: 2, texto: 'Foto del documento', etiquetas: ['Documento: ANVERSO', 'Documento: REVERSO'], alCambiar: zz => leerCarnet(zz.fotos, 'hOcr', 'hN', 'hCi')});
+  const z = zonaFotos('hDoc', {max: 2, texto: 'Foto del documento', etiquetas: ['Documento: ANVERSO', 'Documento: REVERSO'], guia: 'carnet', alCambiar: zz => leerCarnet(zz.fotos, 'hOcr', 'hN', 'hCi')});
   z.pintar(); OCR.precargar();
   $('#hOk').onclick = async () => {
     if(!v('hN')) return toast('Escribe el nombre del huésped', 'var(--bad)');
@@ -1043,24 +1106,81 @@ function pIncidente(){
 }
 
 /* ---------- Encomiendas ---------- */
+/* Contactos del depto (propietarios, inquilinos y residentes cargados desde supervisión) */
+const normDepto = x => String(x || '').toUpperCase().replace(/DEPARTAMENTO|DEPTO|DPTO|DEP\.?/g, '').replace(/[^A-Z0-9]/g, '').replace(/^0+(?=\d)/, '');
+async function contactosDepto(depto){
+  const q = normDepto(depto); if(!q) return [];
+  let pro = [], res = [];
+  try{ [pro, res] = await Promise.all([datos('propietarios'), datos('residentes')]); }catch(_){}
+  const todos = [];
+  for(const f of pro){
+    const d = normDepto(f.depto), extra = f.torre ? ' · ' + f.torre : '';
+    if(f.copropietario || f.telefono) todos.push({d, depto: f.depto, nombre: f.copropietario || 'Propietario', rol: 'Propietario' + extra, tel: f.telefono || ''});
+    if(f.inquilino || f.telefono_inq) todos.push({d, depto: f.depto, nombre: f.inquilino || 'Inquilino', rol: 'Inquilino' + extra, tel: f.telefono_inq || ''});
+  }
+  for(const f of res) todos.push({d: normDepto(f.depto), depto: f.depto, nombre: f.nombre || 'Residente', rol: f.parentesco || 'Residente', tel: f.celular || f.telefono || ''});
+  const exactos = todos.filter(x => x.d === q);
+  const l = exactos.length ? exactos : (q.length >= 2 ? todos.filter(x => x.d.startsWith(q)) : []);
+  const vistos = new Set();
+  return l.filter(x => { const k = sinTildes(x.nombre) + '|' + x.tel; if(vistos.has(k)) return false; vistos.add(k); return true; });
+}
+const telWa = t => { let d = String(t || '').replace(/[^0-9]/g, ''); if(d.length === 8) d = '591' + d; return d; };
+/* abre el chat de WhatsApp de ese número (la app directamente, sin pasar por el navegador) */
+function abrirWhatsApp(tel, texto){
+  const d = telWa(tel); if(!d) return false;
+  location.href = 'whatsapp://send?phone=' + d + '&text=' + encodeURIComponent(texto);
+  return true;
+}
+const msgEncomienda = (depto, nombre, empresa, foto) => '📦 Encomienda para el depto ' + depto + (nombre ? ' (' + nombre + ')' : '') + '. '
+  + 'Ya llegó tu pedido' + (empresa ? ' de ' + empresa : '') + ' y está en portería.' + (foto ? '\nFoto: ' + foto : '') + '\n— ' + G.ed;
+
 function pEncomiendas(tab = 'nueva'){
   cabecera();
   $('#main').innerHTML = `<div class="seg" id="eSeg"><button data-t="nueva" class="${tab === 'nueva' ? 'on' : ''}">Nueva</button><button data-t="pend" class="${tab === 'pend' ? 'on' : ''}">Por entregar</button></div><div id="eC"></div>`;
   $('#eSeg').onclick = e => { const b = e.target.closest('[data-t]'); if(b){ G.pila[G.pila.length - 1] = [pEncomiendas, [b.dataset.t]]; pintar(); } };
   if(tab === 'pend') return pEncPend();
   $('#eC').innerHTML = `<div class="card">
-    <div class="field"><span>Foto del paquete *</span><div class="zf" id="eF"></div></div>
-    <div class="field"><span>Departamento *</span><input id="eD" autocomplete="off"></div>
+    <div class="field"><span>Departamento *</span><input id="eD" autocomplete="off" inputmode="text"></div>
+    <div id="eCt"></div>
     <div class="field"><span>Destinatario</span><input id="eN" autocomplete="off"></div>
+    <div class="field"><span>Foto del paquete *</span><div class="zf" id="eF"></div></div>
     <div class="field"><span>Empresa (DHL, Amazon…)</span><input id="eE" autocomplete="off"></div>
     <button class="btn prim" id="eOk">Registrar encomienda</button></div>`;
-  const z = zonaFotos('eF', {max: 1, texto: 'Foto'}); z.pintar();
-  $('#eOk').onclick = async () => {
+  const z = zonaFotos('eF', {max: 1, texto: 'Foto del paquete'}); z.pintar();
+  let lista = [], elegido = null, gen = 0;
+  const pintarCt = () => {
+    const box = $('#eCt'); if(!box) return;
+    if(!v('eD')){ box.innerHTML = ''; return; }
+    box.innerHTML = lista.length ? `<div style="font-size:13px;color:var(--mute);margin:-4px 0 0">¿A quién le llegó? Se le avisará por WhatsApp al guardar.</div>`
+      + lista.map((x, i) => `<button type="button" class="cto ${elegido === i ? 'on' : ''}" data-c="${i}"><i></i><div class="t"><b>${esc(x.nombre)}</b><span>${esc(x.rol)} · Depto ${esc(x.depto || '')} · ${x.tel ? esc(x.tel) : 'sin celular'}</span></div></button>`).join('')
+      : '<div style="font-size:13px;color:var(--mute)">No hay propietarios ni residentes registrados en ese depto.</div>';
+    $('#eOk').textContent = elegido !== null && lista[elegido].tel ? 'Registrar y avisar por WhatsApp' : 'Registrar encomienda';
+  };
+  let tmr = null;
+  $('#eD').oninput = () => { clearTimeout(tmr); tmr = setTimeout(async () => {
+    const mio = ++gen, l = await contactosDepto(v('eD')); if(mio !== gen) return;
+    lista = l; elegido = l.filter(x => x.tel).length === 1 ? l.findIndex(x => x.tel) : null;
+    if(elegido !== null && !v('eN')) $('#eN').value = lista[elegido].nombre;
+    pintarCt(); }, 250); };
+  $('#eCt').onclick = e => { const b = e.target.closest('[data-c]'); if(!b) return; const i = +b.dataset.c;
+    const antes = elegido !== null ? lista[elegido].nombre : null;
+    elegido = elegido === i ? null : i;
+    if(elegido !== null && (!v('eN') || v('eN') === antes)) $('#eN').value = lista[elegido].nombre;
+    if(elegido === null && v('eN') === antes) $('#eN').value = '';
+    pintarCt(); };
+  $('#eOk').onclick = () => {
     if(!z.fotos.length) return toast('La foto del paquete es obligatoria', 'var(--bad)');
     if(!v('eD')) return toast('Escribe el departamento', 'var(--bad)');
     ocupado($('#eOk'), true, 'Registrando…');
-    await registrar('Encomienda', {ref: 'web_' + G.devId + '_e' + Date.now(), depto: v('eD'), destinatario: v('eN'), empresa: v('eE')}, {fotos: z.fotos});
-    toast('Encomienda registrada', 'var(--ok)'); G.pila[G.pila.length - 1] = [pEncomiendas, ['pend']]; pintar();
+    const c = elegido !== null ? lista[elegido] : null;
+    const depto = c && c.depto ? String(c.depto) : v('eD');
+    /* la foto se sube a una ruta fija para poder mandar su link en el mensaje */
+    const ruta = edSeguro() + '/' + Date.now() + '_' + G.devId + '_enc.jpg', url = SB_URL + '/storage/v1/object/public/osiris/' + ruta;
+    registrar('Encomienda', {ref: 'web_' + G.devId + '_e' + Date.now(), depto, destinatario: v('eN'), empresa: v('eE'),
+      ...(c && c.tel ? {aviso_a: c.nombre, aviso_tel: c.tel} : {})}, {fotos: z.fotos, rutas: [ruta]});
+    /* se abre WhatsApp en el mismo toque (iPhone lo exige) */
+    if(c && c.tel) abrirWhatsApp(c.tel, msgEncomienda(depto, v('eN') || c.nombre, v('eE'), url));
+    toast('Encomienda registrada', 'var(--ok)'); G.pila[G.pila.length - 1] = [pEncomiendas, ['pend']]; setTimeout(pintar, 300);
   };
 }
 async function pEncPend(){
@@ -1075,8 +1195,9 @@ async function pEncPend(){
   }catch(_){ c.innerHTML = '<div class="msg bad">Sin conexión. Intenta de nuevo.</div>'; return; }
   if(!l.length){ c.innerHTML = '<div class="empty">No hay encomiendas por entregar.</div>'; return; }
   c.innerHTML = `<div class="card">${l.map((x, i) => `<div class="item"><div class="t"><b>Depto ${esc(x.d.depto || '-')}</b><span>${esc([x.d.destinatario, x.d.empresa].filter(Boolean).join(' · '))} · llegó ${esc(diaHora(x.t))}</span></div>
-    <button class="btn" data-ent="${i}">Entregar</button></div>`).join('')}</div>`;
+    ${x.d.aviso_tel ? `<button class="btn" data-wa="${i}" aria-label="WhatsApp" style="color:var(--ok)">${icono('whatsapp', 20)}</button>` : ''}<button class="btn" data-ent="${i}">Entregar</button></div>`).join('')}</div>`;
   c.onclick = async e => {
+    const w = e.target.closest('[data-wa]'); if(w){ const x = l[+w.dataset.wa]; abrirWhatsApp(x.d.aviso_tel, msgEncomienda(x.d.depto || '', x.d.destinatario || x.d.aviso_a || '', x.d.empresa || '', x.d.foto_url || '')); return; }
     const b = e.target.closest('[data-ent]'); if(!b) return; const x = l[+b.dataset.ent];
     toast('Foto del residente recibiendo');
     const f = await tomarFoto(false); if(!f) return;
