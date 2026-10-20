@@ -1656,7 +1656,14 @@ async function cargarAjustesEd(){
       <div class="card">${CAMPOS_VISITA.map(([k,t]) => sw(k, t, true)).join('')}
         <label class="field"><span>Dígitos de la tarjeta de acceso</span><input id="aDig" type="number" min="3" max="16" value="${dig}" inputmode="numeric"></label></div>
       <div class="h2">Turnos</div>
-      <div class="card"><label class="field" style="margin-top:0"><span>Tolerancia de relevo (minutos, 0 a 60)</span><input id="aTol" type="number" min="0" max="60" step="5" value="${Turnos.toleranciaDe(M)}" inputmode="numeric"></label>
+      <div class="card">
+        <div class="row" style="margin-top:0"><label class="field" style="flex:1;margin:0"><span>Relevo 1</span><input id="aR1" type="time" value="${esc(relevosDe(M)[0] || '08:00')}"></label>
+          <label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="aR2" type="time" value="${esc(relevosDe(M)[1] || '20:00')}"></label></div>
+        <div style="font-size:13px;color:var(--mute);margin-top:6px">Horario de ingreso del edificio. Al cambiar el relevo 1, el 2 se pone 12 h después (turnos parejos). Los celulares con horario propio lo mantienen.</div>
+        <label class="field"><span>Rondas cada (horas)</span><input id="aRonda" type="number" min="1" max="12" value="${+M.ronda_cada || 2}" inputmode="numeric"></label>
+        <label class="chk"><input type="checkbox" data-mod="alertas" ${M.alertas === true ? 'checked' : ''}> Avisarme por correo si no entra el guardia o falta una ronda</label>
+        <div style="font-size:13px;color:var(--mute)">El aviso llega 30 minutos después del relevo o de la ronda que faltó.</div>
+        <label class="field"><span>Tolerancia de relevo (minutos, 0 a 60)</span><input id="aTol" type="number" min="0" max="60" step="5" value="${Turnos.toleranciaDe(M)}" inputmode="numeric"></label>
         <div style="font-size:13px;color:var(--mute)">Hasta ese margen no cuenta; pasado el margen se cuentan todos los minutos.</div>
         <label class="chk"><input type="checkbox" data-mod="un_guardia" ${M.un_guardia === true ? 'checked' : ''}> Un solo guardia (sin relevo)</label>
         <div style="font-size:13px;color:var(--mute)">Actívalo si el edificio tiene un solo guardia: sus horas extras se cuentan contra su propio horario.</div></div>
@@ -1670,6 +1677,13 @@ async function cargarAjustesEd(){
   }catch(e){ if(mio === ED.gen) c.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; }
 }
 $('#v-edi').addEventListener('click', e => { if(e.target.id === 'aNuevoEd') formNuevoEdificio(); });
+/* relevo 2 = relevo 1 + 12 h (se puede corregir a mano) */
+$('#v-edi').addEventListener('change', e => {
+  if(e.target.id !== 'aR1' || !/^\d\d:\d\d$/.test(e.target.value)) return;
+  const [h, m] = e.target.value.split(':').map(Number);
+  $('#aR2').value = String((h + 12) % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+});
+function relevosDe(M){ return String(M.relevos || '').split(',').map(x => x.trim()).filter(x => /^\d\d:\d\d$/.test(x)); }
 /* Edificio nuevo: queda en la nube y TODOS los celulares (app y web) lo ven para elegirlo */
 function formNuevoEdificio(){
   const torres = [];
@@ -1713,7 +1727,11 @@ $('#v-edi').addEventListener('click', async e => {
     const dig = parseInt($('#aDig').value, 10), tol = parseInt($('#aTol').value, 10);
     if(!(dig >= 3 && dig <= 16)) return $('#aMsg').innerHTML = '<div class="msg bad">Los dígitos de la tarjeta van de 3 a 16.</div>';
     if(!(tol >= 0 && tol <= 60)) return $('#aMsg').innerHTML = '<div class="msg bad">La tolerancia va de 0 a 60 minutos.</div>';
+    const r1 = $('#aR1').value, r2 = $('#aR2').value, cada = parseInt($('#aRonda').value, 10);
+    if(!/^\d\d:\d\d$/.test(r1) || !/^\d\d:\d\d$/.test(r2) || r1 === r2) return $('#aMsg').innerHTML = '<div class="msg bad">Revisa los dos horarios de relevo.</div>';
+    if(!(cada >= 1 && cada <= 12)) return $('#aMsg').innerHTML = '<div class="msg bad">Las rondas van cada 1 a 12 horas.</div>';
     M.tarjeta_digitos = dig; M.tolerancia_min = tol; M.torres = [...ED.cfg.torres];
+    M.relevos = [r1, r2].sort().join(','); M.ronda_cada = cada;
     t.disabled = true;
     try{
       await apiEscribir('POST', 'eventos', nuevoEvento('Config', ED.cfg.ed, 'Supervisión', {modulos: JSON.stringify(M)}));

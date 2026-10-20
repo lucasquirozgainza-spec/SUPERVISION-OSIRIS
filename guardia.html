@@ -342,9 +342,15 @@ const OCR = (() => {
     return t + '\n' + t2;
   }
   let fila = Promise.resolve();
-  const enFila = fn => { const p = fila.then(fn, fn); fila = p.catch(() => {}); return p; };
+  /* cada lectura tiene tope de tiempo: si el lector se cuelga (celular con poca memoria),
+     se reinicia y la siguiente lectura no queda trabada detrás */
+  const conTope = (p, ms) => new Promise((ok, mal) => {
+    const t = setTimeout(() => { try{ worker && worker.terminate(); }catch(_){} worker = null; cargando = null; mal(new Error('tardó demasiado')); }, ms);
+    p.then(v => { clearTimeout(t); ok(v); }, e => { clearTimeout(t); mal(e); });
+  });
+  const enFila = fn => { const p = fila.then(() => conTope(fn(), 90000), () => conTope(fn(), 90000)); fila = p.catch(() => {}); return p; };
   return {
-    parseDosLados, numeroTarjeta, precargar: () => motor().catch(() => null),
+    parseDosLados, numeroTarjeta, precargar: () => motor().catch(() => null), listo: () => !!worker,
     carnet: (frente, reverso) => enFila(async () => {
       const a = await lado(frente), b = reverso ? await lado(reverso) : '';
       /* por si sacaron primero el reverso: se prueba también al revés */
@@ -421,6 +427,10 @@ const icono = (k, t = 22) => `<svg viewBox="0 0 24 24" width="${t}" height="${t}
 /* ---------- Estado ---------- */
 const G = {token:null, link:null, dev:null, devId:null, ed:'', mod:{}, torres:[], tol:15, registro:[], turno:null, pila:[]};
 const turnoKey = () => 'turno_' + G.token;
+function relevosEdificio(){
+  const ed = String(G.mod.relevos || '').split(',').map(x => x.trim()).filter(x => /^\d\d:\d\d$/.test(x));
+  return ed.length ? ed.join(',') : (G.link.relevos || '08:00,20:00');
+}
 function cargarTurno(){ try{ G.turno = JSON.parse(leer(turnoKey()) || 'null'); }catch(_){ G.turno = null; } }
 function guardarTurno(){ guardar(turnoKey(), G.turno ? JSON.stringify(G.turno) : ''); }
 /* lo que se habilitó al crear el link manda; si no, la configuración del edificio */
@@ -484,6 +494,7 @@ async function registrar(tipo, detalle, {fotos = [], campoFotos = 'foto_url', gu
   if(!['Guardia','GuardiaBaja','Config'].includes(tipo)){
     if(G.turno && G.turno.ci && !det.guard_ci) det.guard_ci = G.turno.ci;
     if(G.link.bloque) det.bloque = G.link.bloque;
+    det.link = G.token;
   }
   const item = {tipo, edificio:G.ed, guardia: guardia || (G.turno ? G.turno.nombre : 'Sin turno'), detalle:det, fotos, urls:[], campoFotos, intentos:0, ...(rutas ? {rutas} : {})};
   if(DBQ) await tx('readwrite', s => s.add(item)); else MEM.push(item);
@@ -610,6 +621,26 @@ async function cargarEdificio(){
     .filter(g => !G.link.bloque || !g.bloque || g.bloque === G.link.bloque || g.turno === 'FRANQUERO')
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   void altas;
+}
+/* Si este navegador perdió el turno (otra pestaña, Safari vs. pantalla de inicio,
+   datos borrados), se recupera de la nube: el último ingreso de este link sin salida. */
+async function recuperarTurno(){
+  if(G.turno) return;
+  try{
+    const desde = new Date(Date.now() - 48 * 3600e3).toISOString();
+    const r = [...await api('eventos?select=created_at,tipo,guardia,device_id,detalle&edificio=eq.' + enc(G.ed) + '&created_at=gte.' + enc(desde)
+      + '&tipo=' + enc(inList(['Ingreso de turno', 'Salida de turno', 'Doblar turno'])) + '&order=created_at.asc&limit=500'),
+      ...await pendientesComoEventos(['Ingreso de turno', 'Salida de turno', 'Doblar turno'])];
+    const mio = e => { const d = detalleDe(e); return d.link === G.token || e.device_id === 'web_' + G.devId; };
+    const salidas = new Set(r.filter(e => e.tipo === 'Salida de turno').map(e => String(detalleDe(e).turno_ref || '')));
+    const niveles = new Map(r.filter(e => e.tipo === 'Doblar turno').map(e => [String(detalleDe(e).turno_ref || ''), +detalleDe(e).nivel || 12]));
+    const abiertos = r.filter(e => e.tipo === 'Ingreso de turno' && mio(e) && detalleDe(e).turno_ref && !salidas.has(String(detalleDe(e).turno_ref)));
+    const u = abiertos.sort((a, b) => horaReal(b) - horaReal(a))[0]; if(!u) return;
+    const d = detalleDe(u), ref = String(d.turno_ref), nivel = niveles.get(ref) || 12;
+    if(Date.now() - horaReal(u) > (nivel + 6) * 3600e3) return; // turno ya vencido: no se revive
+    G.turno = {ci: String(d.guard_ci || ''), nombre: u.guardia || 'Guardia', ref, inicio: horaReal(u).toISOString(), nivel};
+    guardarTurno();
+  }catch(_){}
 }
 const cacheDatos = {};
 async function datos(clase){
@@ -763,7 +794,7 @@ function pTurno(){
       if(!z.fotos.length) return toast('La selfie es obligatoria', 'var(--bad)');
       ocupado($('#tOk'), true, 'Registrando…');
       const ahora = new Date(), ref = 'web_' + G.devId + '_t' + ahora.getTime();
-      const relevos = (G.link.relevos || '08:00,20:00');
+      const relevos = relevosEdificio();
       G.turno = {ci: g.ci, nombre: g.nombre, ref, inicio: ahora.toISOString(), nivel: 12};
       guardarTurno();
       await registrar('Ingreso de turno', {turno_ref: ref, ts: ahora.toISOString(), relevos, observaciones: v('tO'), guard_ci: g.ci}, {guardia: g.nombre});
@@ -868,7 +899,7 @@ let ocrSeq = 0;
 async function leerCarnet(fotos, idEst, idNom, idCi){
   const est = $('#' + idEst); if(!est || !fotos.length) { if(est) est.textContent = ''; return; }
   const mio = ++ocrSeq;
-  est.className = 'ocrst'; est.textContent = fotos.length < 2 ? 'Leyendo el anverso… (falta el reverso)' : 'Leyendo el carnet…';
+  est.className = 'ocrst'; est.textContent = (OCR.listo() ? '' : 'Preparando el lector (solo la primera vez, puede tardar)… ') + (fotos.length < 2 ? 'Leyendo el anverso… (falta el reverso)' : 'Leyendo el carnet…');
   try{
     const r = await OCR.carnet(fotos[0], fotos[1]);
     if(mio !== ocrSeq || !$('#' + idEst)) return;
@@ -881,7 +912,12 @@ async function leerCarnet(fotos, idEst, idNom, idCi){
     est.innerHTML = esc(r.nombre || r.ci ? 'Leído: ' + [r.nombre, r.ci ? 'CI ' + r.ci : ''].filter(Boolean).join(' · ') + (falta ? '. No se leyó ' + falta + ': escríbelo.' : '. Revisa que esté bien.')
       : 'No se pudo leer el carnet: escribe los datos o saca otra foto más cerca y sin reflejo.')
       + `<details><summary>Ver lo que leyó</summary><pre>${esc((r.textos || []).join('\n—————\n') || '(nada)')}</pre></details>`;
-  }catch(e){ if(mio === ocrSeq && $('#' + idEst)) est.textContent = 'Sin lectura automática (' + ((e && e.message) || 'error') + '): escribe los datos.'; }
+  }catch(e){
+    if(mio !== ocrSeq || !$('#' + idEst)) return;
+    est.className = 'ocrst';
+    est.innerHTML = esc('Sin lectura automática (' + ((e && e.message) || 'error') + '). Escribe los datos o ') + '<button type="button" class="btn" style="height:36px;padding:0 12px">Reintentar lectura</button>';
+    est.querySelector('button').onclick = () => leerCarnet(fotos, idEst, idNom, idCi);
+  }
 }
 async function leerTarjeta(foto, idEst, idNum){
   const est = $('#' + idEst); if(!est) return;
@@ -1058,6 +1094,28 @@ async function pHospActivos(){
 }
 
 /* ---------- Ronda ---------- */
+/* Franja con hora, novedad, guardia y edificio sobre la PRIMERA foto: así en WhatsApp va un solo álbum
+   (sin texto aparte, que WhatsApp separa) y la descripción se ve en la foto grande del grupo. */
+async function fotoConFranja(blob, lineas){
+  const url = URL.createObjectURL(blob);
+  try{
+    const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = url; });
+    const w = img.naturalWidth, h = img.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+    const fs = Math.round(Math.max(22, Math.min(w, h) * 0.045)), pad = Math.round(fs * 0.7), lh = Math.round(fs * 1.28);
+    const partir = (t, f) => { x.font = f; const out = []; let l = '';
+      for(const p of String(t).split(' ')){ const n = l ? l + ' ' + p : p; if(x.measureText(n).width > w - 2 * pad && l){ out.push(l); l = p; } else l = n; }
+      if(l) out.push(l); return out; };
+    const filas = [];
+    lineas.forEach((t, i) => { const f = (i === 0 ? '700 ' : '600 ') + (i === 0 ? Math.round(fs * 1.1) : fs) + 'px -apple-system, Helvetica, Arial, sans-serif';
+      partir(t, f).slice(0, i === 1 ? 4 : 2).forEach(l => filas.push([l, f])); });
+    const alto = filas.length * lh + pad * 2;
+    x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, h - alto, w, alto);
+    x.fillStyle = '#fff'; x.textBaseline = 'top';
+    filas.forEach(([l, f], i) => { x.font = f; x.fillText(l, pad, h - alto + pad + i * lh); });
+    return await new Promise(ok => c.toBlob(b => ok(b || blob), 'image/jpeg', 0.88));
+  } finally { URL.revokeObjectURL(url); }
+}
 function pRonda(){
   cabecera();
   const min = Math.max(1, parseInt(G.link.ronda_fotos, 10) || 4);
@@ -1065,23 +1123,48 @@ function pRonda(){
     <div class="field"><span>Fotos de la ronda (mínimo ${min})</span><div class="zf" id="rF"></div></div>
     <div class="field"><span>Novedades</span><textarea id="rO" placeholder="Sin novedad"></textarea></div>
     <button class="btn prim" id="rOk">Guardar ronda</button></div>`;
-  const z = zonaFotos('rF', {min, max: 30, texto: 'Tomar fotos de la ronda'}); z.pintar();
+  const quien = () => G.turno ? G.turno.nombre : 'Guardia';
+  const lugar = () => G.ed + (G.link.bloque ? ' · ' + G.link.bloque : '');
+  /* la foto con la franja se prepara antes del toque: el iPhone exige abrir "Compartir" al instante */
+  let lista = null, gen = 0, tmr = null;
+  const preparar = () => { clearTimeout(tmr); lista = null; tmr = setTimeout(async () => {
+    const mio = ++gen; if(!z.fotos.length) return;
+    const obs = v('rO'), ahora = new Date();
+    try{
+      const primera = await fotoConFranja(z.fotos[0], ['RONDA · ' + diaHora(ahora), obs ? 'Novedad: ' + obs : 'Sin novedad', quien() + ' · ' + lugar()]);
+      if(mio === gen) lista = {ahora, obs, n: z.fotos.length, fotos: [primera, ...z.fotos.slice(1)]};
+    }catch(_){}
+  }, 120); };
+  const z = zonaFotos('rF', {min, max: 30, texto: 'Tomar fotos de la ronda', alCambiar: preparar}); z.pintar();
+  $('#rO').oninput = preparar;
   $('#rOk').onclick = async () => {
     if(z.fotos.length < min) return toast('Faltan fotos: ' + z.fotos.length + ' de ' + min, 'var(--bad)');
     ocupado($('#rOk'), true, 'Guardando…');
-    const obs = v('rO'), quien = G.turno ? G.turno.nombre : 'Guardia', ahora = new Date();
-    /* compartir por WhatsApp EN EL MISMO toque (iPhone solo deja abrir "Compartir" así), igual que la app */
-    const texto = (obs ? 'Ronda: ' + obs : 'Ronda sin novedad') + ' - ' + quien + ' - ' + diaHora(ahora) + ' - ' + G.ed + (G.link.bloque ? ' ' + G.link.bloque : '');
-    let compartir = null;
-    try{
-      const files = z.fotos.map((f, i) => new File([f], 'ronda_' + (i + 1) + '.jpg', {type: 'image/jpeg'}));
-      if(navigator.canShare && navigator.canShare({files})) compartir = navigator.share({files, text: texto});
-      else if(navigator.share) compartir = navigator.share({text: texto});
-    }catch(_){ compartir = null; }
+    const obs = v('rO'), ahora = new Date();
+    const texto = (obs ? 'Ronda: ' + obs : 'Ronda sin novedad') + ' - ' + quien() + ' - ' + diaHora(ahora) + ' - ' + G.ed + (G.link.bloque ? ' ' + G.link.bloque : '');
+    const listo = lista && lista.obs === obs && lista.n === z.fotos.length ? lista.fotos : null;
+    const enviar = fotos => {
+      try{
+        const files = fotos.map((f, i) => new File([f], 'ronda_' + (i + 1) + '.jpg', {type: 'image/jpeg'}));
+        /* solo las fotos (la primera lleva la descripción) => WhatsApp las deja juntas en un álbum */
+        if(navigator.canShare && navigator.canShare({files})) return navigator.share({files});
+        if(navigator.share) return navigator.share({text: texto});
+      }catch(_){}
+      return null;
+    };
+    const compartir = listo ? enviar(listo) : null;
     const guardado = registrar('Ronda', {fotos: z.fotos.length, ...(obs ? {observaciones: obs} : {}), ts: ahora.toISOString()}, {fotos: z.fotos.slice(0, 6), campoFotos: 'fotos_url'});
     if(compartir) await compartir.catch(() => {});
     await guardado;
-    toast('Ronda guardada', 'var(--ok)'); volver();
+    toast('Ronda guardada', 'var(--ok)');
+    if(listo){ volver(); return; }
+    /* caso raro: la foto con la descripción no alcanzó a prepararse; se prepara y queda un botón para enviar */
+    let fotos = z.fotos;
+    try{ fotos = [await fotoConFranja(z.fotos[0], ['RONDA · ' + diaHora(ahora), obs ? 'Novedad: ' + obs : 'Sin novedad', quien() + ' · ' + lugar()]), ...z.fotos.slice(1)]; }catch(_){}
+    $('#main').innerHTML = `<div class="card" style="text-align:center"><b style="display:block;font-size:17px;margin-bottom:12px">Ronda guardada ✓</b>
+      <button class="btn prim ok" id="rWa">Enviar fotos a WhatsApp</button><button class="btn" id="rFin" style="width:100%;margin-top:10px">Listo</button></div>`;
+    $('#rWa').onclick = async () => { const p = enviar(fotos); if(p) await p.catch(() => {}); volver(); };
+    $('#rFin').onclick = volver;
   };
 }
 
@@ -1238,7 +1321,7 @@ function pConsultas(tab){
   await abrirCola();
   if(!(await acceso())) return;
   cargarTurno();
-  try{ await cargarEdificio(); }
+  try{ await cargarEdificio(); await recuperarTurno(); }
   catch(_){ bloqueo('<h2>Sin conexión</h2><p style="color:var(--mute)">No se pudo leer el edificio.</p><button class="btn prim" onclick="location.reload()">Reintentar</button>'); return; }
   document.title = 'Osiris · ' + G.ed;
   G.pila = [[inicio, []]]; pintar();
