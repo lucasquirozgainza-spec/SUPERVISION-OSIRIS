@@ -117,6 +117,8 @@ body.trabado{overflow:hidden;position:fixed;left:0;right:0}
 .cto.on{border-color:var(--ok);background:rgba(22,163,74,.08)}.cto.on i{border:7px solid var(--ok)}
 .ocrst details{margin-top:4px}.ocrst pre{white-space:pre-wrap;font-size:11px;background:var(--chip);padding:8px;border-radius:8px;max-height:200px;overflow:auto}
 #camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+/* iPhone: con letra menor a 16 px, Safari hace zoom al tocar un campo */
+input,select,textarea{font-size:max(16px,1em)}
 /* iPhone: iOS difumina y bloquea una franja bajo la barra de estado (más alta
    que la zona segura). Todo lo tocable va debajo y una franja opaca tapa esa zona.
    Se calcula con la zona segura: en una pantalla sin barra (computadora) es 0. */
@@ -658,8 +660,25 @@ async function datos(clase){
 }
 
 /* ---------- Navegación ---------- */
-function ir(pantalla, ...args){ G.pila.push([pantalla, args]); pintar(); scrollTo({top:0}); }
-function volver(){ G.pila.pop(); if(!G.pila.length) G.pila.push([inicio, []]); pintar(); scrollTo({top:0}); }
+/* Cada pantalla deja una entrada en el historial: así el gesto de volver del
+   iPhone (deslizar desde el borde) y el botón atrás de Android regresan a la
+   pantalla anterior en vez de sacar al guardia de la app. */
+let HIST = 0;
+function ir(pantalla, ...args){
+  G.pila.push([pantalla, args]); pintar(); scrollTo({top:0});
+  try{ history.pushState({osiris: ++HIST}, ''); }catch(_){}
+}
+function quitarPantalla(){ G.pila.pop(); if(!G.pila.length) G.pila.push([inicio, []]); pintar(); scrollTo({top:0}); }
+function volver(){
+  if(HIST > 0){ try{ history.back(); return; }catch(_){} }
+  quitarPantalla();
+}
+let CAM_CERRAR = null; // cámara abierta: volver la cierra (no cambia de pantalla)
+window.addEventListener('popstate', () => {
+  if(CAM_CERRAR){ CAM_CERRAR(); try{ history.pushState({osiris: HIST}, ''); }catch(_){} return; }
+  HIST = Math.max(0, HIST - 1);
+  quitarPantalla();
+});
 function pintar(){
   const [fn, args] = G.pila[G.pila.length - 1];
   $('#atras').hidden = G.pila.length <= 1;
@@ -727,7 +746,8 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
       $('#camOk').hidden = max === 1 || fotos.length < Math.max(1, min);
       $('#camTh').innerHTML = fotos.map(b => `<img src="${verBlob(b)}" alt="">`).join('');
     };
-    const cerrar = () => { stream.getTracks().forEach(t => t.stop()); video.srcObject = null; cam.hidden = true; document.body.classList.remove('trabado'); listo(fotos); };
+    const cerrar = () => { CAM_CERRAR = null; stream.getTracks().forEach(t => t.stop()); video.srcObject = null; cam.hidden = true; document.body.classList.remove('trabado'); listo(fotos); };
+    CAM_CERRAR = cerrar;
     $('#camX').onclick = cerrar; $('#camOk').onclick = cerrar;
     $('#camDisp').onclick = async () => {
       const w = video.videoWidth, h = video.videoHeight; if(!w) return;

@@ -35,6 +35,9 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);
 .top{display:flex;align-items:center;gap:10px}
 .brand{font-weight:800;font-size:19px;letter-spacing:.3px;flex:1;min-width:0}
 .brand small{display:block;font-weight:500;font-size:12px;color:var(--mute)}
+#refresh{display:flex;align-items:center;justify-content:center}
+#refresh.gira svg{animation:gira .8s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
 .live{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);white-space:nowrap}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(22,163,74,.6);animation:p 2s infinite}
 .dot.off{background:var(--bad);animation:none}
@@ -45,7 +48,8 @@ select{flex:1;min-width:0;appearance:none;-webkit-appearance:none;border:1px sol
   border-radius:12px;padding:10px 34px 10px 12px;font:inherit;font-size:16px;font-weight:600;
   background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);
   background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%;background-size:6px 6px;background-repeat:no-repeat}
-.periodo{flex:0 0 auto;max-width:42%}
+.periodo{flex:1 1 0}
+.row select,.row .lockedEd{flex:1 1 0;min-width:0}
 .tabs{display:flex;gap:6px;overflow-x:auto;margin:10px -16px 0;padding:0 16px 2px;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;border:0;border-radius:999px;padding:7px 12px;background:var(--chip);color:var(--ink);font:inherit;font-size:14px;font-weight:600}
@@ -167,8 +171,10 @@ body.admin{padding-bottom:0}
 .lock .card{width:100%;max-width:360px;text-align:center;padding:22px 16px}
 .lock h2{margin:0 0 6px}
 .lock input{text-align:center;letter-spacing:8px;font-size:24px}
-.periodo#mesSel{max-width:50%}
+
 .lockedEd{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* iPhone: con letra menor a 16 px, Safari hace zoom al tocar un campo */
+input,select,textarea{font-size:max(16px,1em)}
 /* iPhone: iOS difumina y bloquea una franja bajo la barra de estado (más alta
    que la zona segura). Todo lo tocable va debajo y una franja opaca tapa esa zona.
    Se calcula con la zona segura: en una pantalla sin barra (computadora) es 0. */
@@ -268,7 +274,8 @@ const ICONOS = {
   paquete:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   cama:'<path d="M2 20V6M2 16h20M22 20v-6a3 3 0 0 0-3-3h-9v5"/><circle cx="6" cy="12" r="2"/>',
-  punto:'<circle cx="12" cy="12" r="4"/>'
+  punto:'<circle cx="12" cy="12" r="4"/>',
+  recargar:'<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'
 };
 function icono(k, t = 20){ return `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[k] || ICONOS.punto}</svg>`; }
 const ESTILO = {
@@ -310,8 +317,15 @@ const st = {edif:null, sec:'todo', periodo:'hoy', datos:[], conteos:{}, hayMas:f
 function guardar(k,v){ try{ localStorage.setItem('osiris_'+k, v); }catch(e){} }
 function leer(k){ try{ return localStorage.getItem('osiris_'+k); }catch(e){ return null; } }
 
+/* Con señal mala una consulta podía quedar colgada para siempre (y el botón de
+   recargar no terminaba nunca): se corta a los 20 s. */
+function conTope(ms){ const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return {signal:c.signal, fin:() => clearTimeout(t)}; }
 async function api(path){
-  const r = await fetch(SB_URL + '/rest/v1/' + path, {headers:{apikey:SB_KEY, Accept:'application/json'}, cache:'no-store'});
+  const tp = conTope(20000);
+  let r;
+  try{ r = await fetch(SB_URL + '/rest/v1/' + path, {headers:{apikey:SB_KEY, Accept:'application/json'}, cache:'no-store', signal:tp.signal}); }
+  catch(e){ throw new Error(e.name === 'AbortError' ? 'la nube no respondió' : 'sin conexión'); }
+  finally{ tp.fin(); }
   if(!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
@@ -472,7 +486,6 @@ async function refrescar(manual){
   if(!st.edif) return;
   const mio = ++gen;          // si cambian edificio/pestaña a mitad de carga, se descarta la respuesta vieja
   st.cargando = true;
-  if(manual) $('#refresh').textContent = '…';
   try{
     const edif = st.edif, sec = st.sec;
     const [ev, cont, pres, tur] = await Promise.all([cargarEventos(limite), cargarConteos(), cargarPresencia(), cargarTurnos()]);
@@ -485,7 +498,7 @@ async function refrescar(manual){
     $('#dot').classList.add('off'); $('#liveTxt').textContent = 'Sin conexión';
     if(!st.datos.length) $('#list').innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).<br>Revisa tu conexión y toca ↻</div>`;
   }finally{
-    if(mio === gen){ st.cargando = false; $('#refresh').textContent = '↻'; }
+    if(mio === gen) st.cargando = false;
   }
 }
 
@@ -647,7 +660,15 @@ $('#periodo').addEventListener('change', e => {
   st.periodo = e.target.value; guardar('periodo', st.periodo); limite = PAGINA; st.datos = [];
   $('#list').innerHTML = '<div class="empty">Cargando…</div>'; refrescar();
 });
-$('#refresh').addEventListener('click', () => { if(typeof refrescarVista === 'function') refrescarVista(); else refrescar(true); });
+/* Recargar: sirve en TODAS las vistas, gira mientras carga y no se encima si lo tocan dos veces */
+$('#refresh').innerHTML = icono('recargar', 20);
+$('#refresh').addEventListener('click', () => {
+  const b = $('#refresh'); if(b.classList.contains('gira')) return;
+  b.classList.add('gira');
+  const desde = Date.now();
+  Promise.resolve().then(() => typeof refrescarVista === 'function' ? refrescarVista() : refrescar(true)).catch(() => {})
+    .finally(() => setTimeout(() => b.classList.remove('gira'), Math.max(0, 500 - (Date.now() - desde))));
+});
 $('#list').addEventListener('click', ev => {
   if(ev.target.id === 'mas'){ limite += PAGINA; refrescar(true); return; }
   if(ev.target.tagName === 'IMG'){ ev.stopPropagation(); verFoto(ev.target.src); return; }
@@ -2964,12 +2985,16 @@ function irA(v){
   if(v === 'cfg') pintarAjustes();
 }
 function refrescarVista(){
-  if(vistaActual === 'mov') refrescar(true);
-  else if(vistaActual === 'gua') cargarGuardias();
-  else if(vistaActual === 'inf') pintarInforme();
-  else if(vistaActual === 'bus'){ if(BUS.res.length) buscar(); else pintarBuscar(); }
-  else if(vistaActual === 'edi'){ if(ED.sucio[ED.sub]) return; delete ED.datos[ED.sub]; pintarEdificio(); }
-  else pintarAjustes();
+  if(vistaActual === 'mov') return refrescar(true);
+  if(vistaActual === 'gua') return Promise.all([cargarGuardias(), cargarSolicitudes()]);
+  if(vistaActual === 'inf') return pintarInforme();
+  if(vistaActual === 'bus') return BUS.res.length ? buscar() : pintarBuscar();
+  if(vistaActual === 'edi'){
+    /* con cambios sin guardar no se recarga (se perderían): se avisa */
+    if(ED.sucio[ED.sub]){ alert('Tienes cambios sin guardar en esta sección. Guárdalos antes de recargar.'); return; }
+    delete ED.datos[ED.sub]; return pintarEdificio();
+  }
+  return pintarAjustes();
 }
 function alCambiarEdificio(){ GU.datos = null; BUS.res = []; BUS.sel = new Set(); if(vistaActual === 'bus') pintarBuscar(); ED.datos = {}; ED.sucio = {}; ED.cfg = null; if(vistaActual === 'edi') pintarEdificio(); if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'inf') pintarInforme(); }
 $('#bnav').addEventListener('click', e => { const b = e.target.closest('button'); if(b) irA(b.dataset.v); });
