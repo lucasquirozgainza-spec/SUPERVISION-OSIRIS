@@ -19,7 +19,7 @@
 }
 :root[data-theme="dark"]{ --bg:#0b1118; --card:#151d27; --ink:#e8edf3; --mute:#8b97a6; --line:#243042; --chip:#1c2633; --acc:#3b82f6; }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden;overflow-x:clip}
 [hidden]{display:none !important}
 header{position:sticky;top:0;z-index:5;background:var(--marca);color:#fff;padding:calc(env(safe-area-inset-top) + 10px) 16px 12px}
 
@@ -117,12 +117,12 @@ body.trabado{overflow:hidden;position:fixed;left:0;right:0}
 .cto.on{border-color:var(--ok);background:rgba(22,163,74,.08)}.cto.on i{border:7px solid var(--ok)}
 .ocrst details{margin-top:4px}.ocrst pre{white-space:pre-wrap;font-size:11px;background:var(--chip);padding:8px;border-radius:8px;max-height:200px;overflow:auto}
 #camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
-/* iPhone (app en la pantalla de inicio): iOS difumina y bloquea una franja bajo
-   la barra de estado, más alta que la zona segura. Todo lo tocable va debajo. */
-@media (display-mode: standalone){
-  header{padding-top:calc(env(safe-area-inset-top) + 30px)}
-  .camTop{padding-top:calc(env(safe-area-inset-top) + 30px)}
-}
+/* iPhone: iOS difumina y bloquea una franja bajo la barra de estado (más alta
+   que la zona segura). Todo lo tocable va debajo y una franja opaca tapa esa zona.
+   Se calcula con la zona segura: en una pantalla sin barra (computadora) es 0. */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) * 1.7);background:var(--marca);z-index:9;pointer-events:none}
+header{padding-top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
+.camTop{padding-top:calc(env(safe-area-inset-top) * 1.7 + 12px)}
 </style>
 </head>
 <body>

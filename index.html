@@ -28,7 +28,7 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);
-  font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+  font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden;overflow-x:clip}
 header{position:sticky;top:0;z-index:5;background:var(--bg);
   padding:calc(env(safe-area-inset-top) + 10px) 16px 8px;border-bottom:1px solid var(--line)}
 
@@ -169,13 +169,13 @@ body.admin{padding-bottom:0}
 .lock input{text-align:center;letter-spacing:8px;font-size:24px}
 .periodo#mesSel{max-width:50%}
 .lockedEd{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* iPhone (app en la pantalla de inicio): iOS difumina y bloquea una franja bajo
-   la barra de estado, más alta que la zona segura. Todo lo tocable va debajo. */
-@media (display-mode: standalone){
-  header{padding-top:calc(env(safe-area-inset-top) + 30px)}
-  .lb .x{top:calc(env(safe-area-inset-top) + 30px)}
-  .panel{max-height:calc(100dvh - env(safe-area-inset-top) - 60px)}
-}
+/* iPhone: iOS difumina y bloquea una franja bajo la barra de estado (más alta
+   que la zona segura). Todo lo tocable va debajo y una franja opaca tapa esa zona.
+   Se calcula con la zona segura: en una pantalla sin barra (computadora) es 0. */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) * 1.7);background:var(--bg);z-index:9;pointer-events:none}
+header{padding-top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
+.lb .x{top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
+.panel{max-height:min(88dvh, calc(100dvh - env(safe-area-inset-top) * 1.7 - 20px))}
 </style>
 </head>
 <body>
@@ -978,6 +978,8 @@ const PanelHoras = {
     if (t.fin !== null) {
       const m = minEntre(t.fin, t.inicio);
       if (m <= 0 || m > 3600) { t.marca = 'inconsistente'; t.notas.push('Salida antes del ingreso o turno de más de 60 h: no se calcula'); }
+      /* ingreso y salida en menos de 1 h: registro por error (ej. en el celular de otro bloque) */
+      else if (m < 60) { t.marca = 'muy corto'; t.notas.push('Turno de ' + m + ' min: parece un registro por error, no se calcula'); }
     } else if (Math.trunc((now - t.inicio) / 3600000) > t.nivel + 12) {
       t.marca = 'sin salida'; t.notas.push('No se registró la salida');
     }
