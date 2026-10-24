@@ -31,6 +31,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);
   font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden}
 header{position:sticky;top:0;z-index:5;background:var(--bg);
   padding:calc(env(safe-area-inset-top) + 10px) 16px 8px;border-bottom:1px solid var(--line)}
+
 .top{display:flex;align-items:center;gap:10px}
 .brand{font-weight:800;font-size:19px;letter-spacing:.3px;flex:1;min-width:0}
 .brand small{display:block;font-weight:500;font-size:12px;color:var(--mute)}
@@ -151,6 +152,11 @@ body.admin{padding-bottom:0}
 .turno:first-child{border-top:0}
 .turno .tl{display:flex;gap:8px}
 .turno .tl b{flex:1}
+.sol .tl{display:flex;gap:8px;align-items:baseline}
+.sol .tl b{flex:1}
+.sol .tl span{color:var(--mute);font-size:13px}
+.sol .acts{margin-top:10px}
+.solN{position:absolute;top:2px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;line-height:17px;text-align:center}
 .turno .mv{font-size:13px;color:var(--mute);margin-top:3px}
 .lnk{border-top:1px solid var(--line);padding:10px 0}
 .lnk:first-child{border-top:0}
@@ -163,6 +169,13 @@ body.admin{padding-bottom:0}
 .lock input{text-align:center;letter-spacing:8px;font-size:24px}
 .periodo#mesSel{max-width:50%}
 .lockedEd{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* iPhone (app en la pantalla de inicio): iOS difumina y bloquea una franja bajo
+   la barra de estado, más alta que la zona segura. Todo lo tocable va debajo. */
+@media (display-mode: standalone){
+  header{padding-top:calc(env(safe-area-inset-top) + 30px)}
+  .lb .x{top:calc(env(safe-area-inset-top) + 30px)}
+  .panel{max-height:calc(100dvh - env(safe-area-inset-top) - 60px)}
+}
 </style>
 </head>
 <body>
@@ -272,10 +285,11 @@ const ESTILO = {
   'Salida de visita':     {c:'#64748b',       i:'salida', t:'Salida de visita'},
   'Entrega de encomienda':{c:'#a16207',       i:'check', t:'Encomienda entregada'},
   'Salida de hospedaje':  {c:'#0d9488',       i:'salida', t:'Salida de hospedaje'},
+  'Solicitud':            {c:'#6d4c41',       i:'informe', t:'Solicitud (adelanto / día libre)'},
 };
 /* Campos internos que no se muestran */
 const OCULTOS = new Set(['uid','ts','guard_ci','guard_id','guard_uuid','turno_ref','device_id','foto_url','fotos_url',
-  'foto','foto_local','fotos_local','building_id','unit_id','id','edificio','guardia','eliminado','version','app','ref','cargo','relevos']);
+  'foto','foto_local','fotos_local','building_id','unit_id','id','edificio','guardia','eliminado','version','app','ref','cargo','relevos','sid']);
 const ETIQUETAS = {
   bloque:'Bloque', torre:'Torre', observaciones:'Observaciones', ubicacion:'Ubicación', nivel:'Nivel',
   nombre:'Nombre', depto:'Depto.', departamento:'Departamento', tipo:'Tipo', motivo:'Motivo', ci:'CI',
@@ -689,6 +703,9 @@ const Turnos = {
   limpiar(hs){
     const out = [];
     for (const h of hs) { const p = this.parseHora(h); if (!p) continue; const f = this.fmtHora(p[0], p[1]); if (!out.includes(f)) out.push(f); }
+    /* Un solo horario (ej. el celular con solo "08:00"): el otro relevo es 12 h después.
+       Sin esto los relevos de la noche no se emparejaban y no salían horas extras. */
+    if (out.length === 1) { const p = this.parseHora(out[0]); out.push(this.fmtHora((p[0] + 12) % 24, p[1])); }
     return out;
   },
   relevoCercano(t, hs){
@@ -757,7 +774,9 @@ class RegistroTurno {
 }
 
 class ResumenGuardia {
-  constructor(guardia, clave){ this.guardia = guardia; this.clave = clave ?? guardia; this.turnos = []; }
+  /* movs: horas a favor / en contra del periodo. Cada relevo cuenta en el mes del
+     turno que termina en él, para los DOS guardias (siempre en espejo). */
+  constructor(guardia, clave){ this.guardia = guardia; this.clave = clave ?? guardia; this.turnos = []; this.movs = []; }
   get _validos(){ return this.turnos.filter(t => t.valido); }
   get _cerrados(){ return this.turnos.filter(t => t.cerrado); }
   get dias(){ return new Set(this._validos.map(t => t.inicio.getFullYear() + '-' + (t.inicio.getMonth()+1) + '-' + t.inicio.getDate())).size; }
@@ -765,10 +784,10 @@ class ResumenGuardia {
   get n24(){ return this._cerrados.filter(t => t.nivel === 24).length; }
   get n36(){ return this._cerrados.filter(t => t.nivel === 36).length; }
   get horas(){ return this._cerrados.reduce((a, t) => a + t.horas, 0); }
-  get aFavor(){ return this._validos.reduce((a, t) => a + t.aFavor, 0); }
-  get enContra(){ return this._validos.reduce((a, t) => a + t.enContra, 0); }
+  get aFavor(){ return this.movs.reduce((a, m) => m.horas > 0 ? a + m.horas : a, 0); }
+  get enContra(){ return this.movs.reduce((a, m) => m.horas < 0 ? a - m.horas : a, 0); }
   get saldo(){ return this.aFavor - this.enContra; }
-  get vecesTarde(){ return this._validos.filter(t => t.llegoTarde).length; }
+  get vecesTarde(){ return this.movs.filter(m => m.horas < 0 && m.motivo.startsWith('Llegó tarde')).length; }
   get incompletos(){ return this.turnos.filter(t => !t.valido).length; }
 }
 
@@ -788,11 +807,16 @@ const PanelHoras = {
       const lista = porPuesto.get(puesto).sort(this._orden);
       this._calcularPuesto(lista, tol, franqueros, unGuardia);
       const p = {puesto, toleranciaMin, guardias: new Map(), turnos: []};
+      const resumen = t => { if (!p.guardias.has(t.clave)) p.guardias.set(t.clave, new ResumenGuardia(t.guardia, t.clave)); return p.guardias.get(t.clave); };
+      /* El relevo cuenta en el mes del turno que TERMINA en él: el mes empieza
+         con el ingreso del diurno del día 1 (si llega tarde, ese tiempo y lo que
+         esperó el nocturno son del mes anterior) y termina con el relevo del
+         día 1 siguiente. Para los dos guardias igual: siempre en espejo. */
+      const movEnPeriodo = m => { const r = m.mes || m.programado; return (!desde || !(r < desde)) && (!hasta || r < hasta); };
       for (const t of lista) {
-        if (!enPeriodo(t)) continue;
-        p.turnos.push(t);
-        if (!p.guardias.has(t.clave)) p.guardias.set(t.clave, new ResumenGuardia(t.guardia, t.clave));
-        p.guardias.get(t.clave).turnos.push(t);
+        if (enPeriodo(t)) { p.turnos.push(t); resumen(t).turnos.push(t); }
+        if (!t.valido) continue;
+        for (const m of t.movimientos) if (movEnPeriodo(m)) resumen(t).movs.push(m);
       }
       if (p.turnos.length) out.push(p);
     }
@@ -843,16 +867,16 @@ const PanelHoras = {
     if (entra > p) {
       const espero = this._h(sale < entra ? sale : entra, p);
       if (espero > tol) {
-        a.movimientos.push({programado: p, real: sale, horas: espero, motivo: 'Esperó a su relevo', con: b.guardia});
-        b.movimientos.push({programado: p, real: entra, horas: -espero, motivo: 'Llegó tarde al relevo', con: a.guardia});
+        a.movimientos.push({programado: p, mes: a.progInicio, real: sale, horas: espero, motivo: 'Esperó a su relevo', con: b.guardia});
+        b.movimientos.push({programado: p, mes: a.progInicio, real: entra, horas: -espero, motivo: 'Llegó tarde al relevo', con: a.guardia});
       }
       if (sale < entra && this._h(entra, sale) > tol) a.notas.push('Se fue antes de que llegara su relevo: ' + Turnos.duracion(minEntre(entra, sale)) + ' sin cubrir');
     }
     if (sale < p) {
       const cubrio = this._h(p, entra > sale ? entra : sale);
       if (cubrio > tol) {
-        b.movimientos.push({programado: p, real: entra, horas: cubrio, motivo: 'Entró antes y lo cubrió', con: a.guardia});
-        a.movimientos.push({programado: p, real: sale, horas: -cubrio, motivo: 'Salió antes del relevo', con: b.guardia});
+        b.movimientos.push({programado: p, mes: a.progInicio, real: entra, horas: cubrio, motivo: 'Entró antes y lo cubrió', con: a.guardia});
+        a.movimientos.push({programado: p, mes: a.progInicio, real: sale, horas: -cubrio, motivo: 'Salió antes del relevo', con: b.guardia});
       }
     }
   },
@@ -860,12 +884,12 @@ const PanelHoras = {
   _finSinRelevo(a, tol, cuenta = false){
     const d = this._h(a.fin, a.progFin);
     /* edificio de un solo guardia: se compara con su propio horario */
-    if (cuenta && Math.abs(d) > tol) { a.movimientos.push({programado: a.progFin, real: a.fin, horas: d, motivo: d > 0 ? 'Se quedó después de su hora' : 'Salió antes de su hora'}); return; }
+    if (cuenta && Math.abs(d) > tol) { a.movimientos.push({programado: a.progFin, mes: a.progInicio, real: a.fin, horas: d, motivo: d > 0 ? 'Se quedó después de su hora' : 'Salió antes de su hora'}); return; }
     if (Math.abs(d) > tol) a.notas.push((d > 0 ? 'Salió después' : 'Salió antes') + ' de su hora (' + Turnos.duracion(Math.round(Math.abs(d) * 60)) + ') sin relevo registrado: no cuenta');
   },
   _inicioSinRelevo(b, tol, cuenta = false){
     const tarde = this._h(b.inicio, b.progInicio);
-    if (cuenta && tarde > tol) { b.movimientos.push({programado: b.progInicio, real: b.inicio, horas: -tarde, motivo: 'Llegó tarde'}); return; }
+    if (cuenta && tarde > tol) { b.movimientos.push({programado: b.progInicio, mes: b.progInicio, real: b.inicio, horas: -tarde, motivo: 'Llegó tarde'}); return; }
     if (tarde > tol) b.notas.push('Entró ' + Turnos.duracion(Math.round(tarde * 60)) + ' tarde sin relevo registrado: no cuenta');
   },
   /* Panel del mes (año, mes 0-11) de UN edificio desde los eventos de la nube */
@@ -878,6 +902,7 @@ const PanelHoras = {
     for (const p of puestos) for (const r of p.guardias.values()) {
       if (!out.has(r.clave)) out.set(r.clave, new ResumenGuardia(r.guardia, r.clave));
       out.get(r.clave).turnos.push(...r.turnos);
+      out.get(r.clave).movs.push(...r.movs);
     }
     for (const r of out.values()) r.turnos.sort(this._orden);
     return out;
@@ -1078,6 +1103,7 @@ async function horasDelMes(ed, y, m, registro, cfg){
 async function cargarGuardias(){
   const box = $('#v-gua'); if(!st.edif){ box.innerHTML = '<div class="empty">Elige un edificio.</div>'; return; }
   const mio = ++GU.gen, ed = st.edif, mes = mesActual();
+  cargarSolicitudes();
   if(!GU.datos || GU.datos.ed !== ed) box.innerHTML = '<div class="empty">Cargando guardias…</div>';
   try{
     const [registro, cfg] = await Promise.all([leerRegistro(ed), leerConfig(ed)]);
@@ -1110,12 +1136,14 @@ function pintarGuardias(){
       </div></div>`;
   };
   box.innerHTML = `
-    <button class="btn prim" id="gNuevo">＋ Registrar guardia</button>
+    <div id="gSol"></div>
+    <button class="btn prim" id="gNuevo" style="margin-top:14px">＋ Registrar guardia</button>
     <div class="h2">${esc(D.ed)} · ${esc(mesTxt(D.mes))} · ${activos.length} activo${activos.length === 1 ? '' : 's'}</div>
     ${activos.length ? activos.map(card).join('') : '<div class="empty">No hay guardias registrados en este edificio.</div>'}
     ${bajas.length ? `<button class="btn more" id="gBajas">${GU.verBajas ? 'Ocultar' : 'Ver'} dados de baja (${bajas.length})</button>
       ${GU.verBajas ? bajas.map(card).join('') : ''}` : ''}
     <div class="msg" style="margin-top:14px">${D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.'} Un turno de 36 h cuenta como día extra, no como horas extras. Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.</div>`;
+  pintarSolicitudes();
 }
 
 $('#v-gua').addEventListener('click', ev => {
@@ -1163,15 +1191,27 @@ function formGuardia(){
   };
 }
 
+/* Relevo del día 1 siguiente (fin del último turno del mes): cuenta en este mes
+   para los dos guardias, aunque el turno del que entra ya sea del mes siguiente. */
+function movsOtroMes(r){
+  if(!r || !r.movs) return '';
+  const propios = new Set(r.turnos.flatMap(t => t.movimientos));
+  const otros = r.movs.filter(m => !propios.has(m));
+  if(!otros.length) return '';
+  return otros.map(m => `<div class="turno"><div class="tl"><b>Relevo ${esc(m.programado.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}))} ${esc(hm(m.programado))}</b><span>fin de mes</span></div>
+    <div class="mv"><span class="${m.horas > 0 ? 'pos' : 'neg'}">${esc(Turnos.saldo(m.horas))}</span> ${esc(m.motivo)}${m.con ? ' (' + esc(m.con) + ')' : ''}</div></div>`).join('');
+}
+
 /* ---------- Detalle ---------- */
 async function detalleGuardia(ci){
   const D = GU.datos; const g = D.registro.get(ci); if(!g) return;
   const r = D.horas.get(ci);
+  const cuentaAqui = new Set(r ? r.movs : []);
   const turnosHtml = !r || !r.turnos.length ? '<div class="empty" style="padding:16px">Sin turnos en el mes.</div>' : r.turnos.map(t => {
     const f = d => d.toLocaleDateString('es',{weekday:'short',day:'2-digit',month:'2-digit'}) + ' ' + hm(d);
     const est = t.estado === 'ok' ? '' : ` <span class="badge" style="background:${t.estado === 'abierto' ? 'var(--ok)' : 'var(--warn)'}">${esc(t.estado === 'abierto' ? 'EN TURNO' : t.estado.toUpperCase())}</span>`;
     const dur = t.cerrado ? ' · ' + Turnos.duracion(Math.round(t.horas * 60)) : '';
-    const movs = t.movimientos.map(m => `<div class="mv"><span class="${m.horas > 0 ? 'pos' : 'neg'}">${esc(Turnos.saldo(m.horas))}</span> ${esc(m.motivo)}${m.con ? ' (' + esc(m.con) + ')' : ''}</div>`).join('');
+    const movs = t.movimientos.map(m => `<div class="mv"><span class="${m.horas > 0 ? 'pos' : 'neg'}">${esc(Turnos.saldo(m.horas))}</span> ${esc(m.motivo)}${m.con ? ' (' + esc(m.con) + ')' : ''}${cuentaAqui.has(m) ? '' : ' · cuenta en el mes anterior'}</div>`).join('');
     const notas = t.notas.map(n => `<div class="mv">${esc(n)}</div>`).join('');
     return `<div class="turno"><div class="tl"><b>${esc(f(t.inicio))} → ${t.fin && t.estado !== 'sin ingreso' ? esc(hm(t.fin)) : '…'}</b><span>${t.nivel} h${dur}</span></div>${est}${movs}${notas}</div>`;
   }).join('');
@@ -1184,7 +1224,8 @@ async function detalleGuardia(ci){
       ${s(`<b>${r ? r.dias : 0}</b>`, 'Días')}${s(`<b>${r ? r.n12 : 0}</b>`, 'Turnos 12 h')}${s(`<b>${r ? r.n24 : 0}</b>`, 'Turnos 24 h')}${s(`<b>${r ? r.n36 : 0}</b>`, 'Turnos 36 h')}
     </div>
     ${r && (r.vecesTarde || r.incompletos) ? `<div class="msg">${r.vecesTarde ? r.vecesTarde + ' llegada(s) tarde. ' : ''}${r.incompletos ? r.incompletos + ' turno(s) incompletos (no suman ni restan).' : ''}</div>` : ''}
-    <div class="h2">Ingresos y salidas</div><div class="card">${turnosHtml}</div>
+    <div class="h2">Ingresos y salidas</div><div class="card">${turnosHtml}${movsOtroMes(r)}</div>
+    <div class="h2">Adelantos y días libres</div><div id="gSolG"><div class="empty" style="padding:16px">Cargando…</div></div>
     <div class="h2">Registros del mes</div><div id="gReg"><div class="empty" style="padding:16px">Cargando…</div></div>
     <div class="h2">Acciones</div>
     <div class="acts">
@@ -1212,13 +1253,14 @@ async function detalleGuardia(ci){
       rol: g.turno === 'FRANQUERO' ? 'franquero' : 'guardia', cargo: g.turno === 'FRANQUERO' ? 'Franquero' : 'Guardia de Seguridad'}));
   }, 'Reactivando');
   $('#gElim').onclick = () => eliminarGuardia(g);
+  historialSolGuardia(D.ed, g, D.mes);
   /* registros del mes de este guardia (por su CI) */
   try{
     const desde = new Date(D.mes.y, D.mes.m, 1), hasta = new Date(D.mes.y, D.mes.m + 1, 2);
     const regs = (await paginas('eventos?select=*&edificio=eq.' + enc(D.ed) + '&detalle->>guard_ci=eq.' + enc(g.ci)
       + '&created_at=gte.' + enc(desde.toISOString()) + '&created_at=lt.' + enc(hasta.toISOString()) + '&order=created_at.desc'))
       .filter(e => { const t = horaReal(e); return t >= desde && t < new Date(D.mes.y, D.mes.m + 1, 1); })
-      .filter(e => !['Ingreso de turno','Salida de turno','Doblar turno'].includes(e.tipo))
+      .filter(e => !['Ingreso de turno','Salida de turno','Doblar turno','Solicitud'].includes(e.tipo))
       .sort((a,b) => horaReal(b) - horaReal(a));
     const cont = {}; regs.forEach(e => cont[e.tipo] = (cont[e.tipo]||0) + 1);
     $('#gReg').innerHTML = !regs.length ? '<div class="empty" style="padding:16px">Sin rondas, visitas ni novedades registradas.</div>'
@@ -1251,6 +1293,174 @@ function eliminarGuardia(g){
     }catch(e){ $('#eMsg').innerHTML = `<div class="msg bad">No se pudo: ${esc(e.message)}</div>`; $('#eOk').disabled = false; }
   };
 }
+
+/* ===================== SOLICITUDES: adelantos y días libres (solo supervisión) =====================
+   La app manda   'Solicitud' {clase: adelanto|libre, sid, motivo, fecha}
+   Supervisión    'Respuesta' {sid, estado: aprobado|rechazado}
+   Adelanto aprobado → el guardia escribe lo que recibió: 'Solicitud' {clase: monto, sid, monto}
+   Supervisión    'Respuesta' {sid, estado: confirmado|no_entregado, monto}
+   Solo lo CONFIRMADO cuenta como adelanto entregado. */
+const SOL = {lista:[], gen:0, cargado:false};
+const SOL_DIAS = 120;
+
+function bsTxt(v){ const n = +v; if(!isFinite(n)) return '-'; return 'Bs ' + (Number.isInteger(n) ? n : n.toFixed(2)); }
+function diaLibreTxt(ymd){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); if(!m) return ymd || ''; return new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString('es',{weekday:'long',day:'2-digit',month:'long'}); }
+
+async function leerSolicitudes(){
+  const desde = enc(new Date(Date.now() - SOL_DIAS*864e5).toISOString());
+  const rows = await paginas('eventos?select=edificio,guardia,detalle,created_at&tipo=in.(Solicitud,Respuesta)&created_at=gte.' + desde + '&order=created_at.asc');
+  const porSid = new Map(), montos = new Map(), resp = [];
+  for(const e of rows){
+    const d = detalleDe(e), sid = String(d.sid || ''); if(!sid) continue;
+    if(e.tipo === 'Respuesta'){ resp.push({sid, d, t:horaReal(e)}); continue; }
+    if(d.clase === 'monto'){ montos.set(sid, {monto:+d.monto, t:horaReal(e)}); continue; }
+    if(d.clase !== 'adelanto' && d.clase !== 'libre') continue;
+    porSid.set(sid, {sid, ed:e.edificio, clase:d.clase, guardia:String(e.guardia || ''), ci:String(d.guard_ci || ''),
+      bloque:String(d.bloque || ''), motivo:String(d.motivo || ''), fecha:String(d.fecha || ''), t:horaReal(e),
+      estado:'pendiente', montoGuardia:null, monto:null, cuandoResp:null});
+  }
+  for(const [sid, m] of montos){ const x = porSid.get(sid); if(x) x.montoGuardia = m.monto; }
+  resp.sort((a,b) => a.t - b.t);
+  for(const r of resp){
+    const x = porSid.get(r.sid); if(!x) continue;
+    if(!['aprobado','rechazado','confirmado','no_entregado'].includes(r.d.estado)) continue;
+    x.estado = r.d.estado; x.cuandoResp = r.t;
+    if(r.d.estado === 'confirmado') x.monto = isFinite(+r.d.monto) ? +r.d.monto : x.montoGuardia;
+  }
+  for(const x of porSid.values()) if(x.clase === 'adelanto' && x.estado === 'aprobado' && x.montoGuardia != null) x.estado = 'por_confirmar';
+  return [...porSid.values()].sort((a,b) => b.t - a.t);
+}
+
+const porAtender = x => x.estado === 'pendiente' || x.estado === 'por_confirmar';
+
+/* Número en el botón "Guardias" de la barra de abajo */
+function pintarAvisoSol(){
+  const b = document.querySelector('#bnav button[data-v="gua"]'); if(!b) return;
+  const n = SOL.lista.filter(porAtender).length;
+  let s = b.querySelector('.solN');
+  if(!n){ if(s) s.remove(); return; }
+  if(!s){ s = document.createElement('span'); s.className = 'solN'; b.style.position = 'relative'; b.appendChild(s); }
+  s.textContent = n > 9 ? '9+' : n;
+}
+
+async function cargarSolicitudes(){
+  const mio = ++SOL.gen;
+  try{
+    const l = await leerSolicitudes();
+    if(mio !== SOL.gen) return;
+    SOL.lista = l; SOL.cargado = true;
+  }catch(e){
+    if(mio !== SOL.gen) return;
+    const box = $('#gSol'); if(box) box.innerHTML = `<div class="err">No se pudieron leer las solicitudes (${esc(e.message)}).</div>`;
+    return;
+  }
+  pintarAvisoSol();
+  pintarSolicitudes();
+}
+
+function itemSol(x, conEdificio){
+  const tit = x.clase === 'adelanto' ? 'Adelanto' : 'Día libre · ' + diaLibreTxt(x.fecha);
+  const pedido = x.t.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}) + ' ' + hm(x.t);
+  const quien = esc(x.guardia) + (conEdificio ? ' · ' + esc(x.ed) : '') + (x.bloque ? ' · ' + esc(x.bloque) : '');
+  let estado = '', acciones = '';
+  switch(x.estado){
+    case 'pendiente':
+      estado = 'Esperando tu respuesta';
+      acciones = `<div class="acts"><button class="btn prim" data-sact="aprobado" data-sid="${esc(x.sid)}">Aprobar</button>
+        <button class="btn" data-sact="rechazado" data-sid="${esc(x.sid)}">No aprobar</button></div>`;
+      break;
+    case 'aprobado':
+      estado = x.clase === 'adelanto' ? 'Aprobado · falta que el guardia escriba el monto que recibió' : 'Aprobado';
+      break;
+    case 'por_confirmar':
+      estado = `El guardia dice que recibió <b>${esc(bsTxt(x.montoGuardia))}</b>`;
+      acciones = `<label class="field" style="margin:8px 0 6px"><span>Monto que le diste</span>
+          <input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(x.montoGuardia)}" data-smonto="${esc(x.sid)}"></label>
+        <div class="acts"><button class="btn prim" data-sact="confirmado" data-sid="${esc(x.sid)}">Confirmar</button>
+        <button class="btn" data-sact="no_entregado" data-sid="${esc(x.sid)}">No se lo di</button></div>`;
+      break;
+    case 'confirmado': estado = `Confirmado · <b>${esc(bsTxt(x.monto))}</b>`; break;
+    case 'rechazado': estado = 'No aprobado'; break;
+    case 'no_entregado': estado = 'No confirmado (no cuenta como adelanto)'; break;
+  }
+  return `<div class="card sol">
+    <div class="tl"><b>${esc(tit)}</b><span>${esc(pedido)}</span></div>
+    <div class="gid">${quien}</div>
+    ${x.motivo ? `<div style="margin-top:4px">${esc(x.motivo)}</div>` : ''}
+    <div style="margin-top:6px;color:var(--mute)">${estado}</div>
+    ${acciones}<div class="sMsg" data-smsg="${esc(x.sid)}"></div></div>`;
+}
+
+function pintarSolicitudes(){
+  const box = $('#gSol'); if(!box) return;
+  if(!SOL.cargado){ box.innerHTML = '<div class="empty" style="padding:12px">Cargando solicitudes…</div>'; return; }
+  const ed = st.edif, mes = mesActual();
+  const atender = SOL.lista.filter(porAtender);
+  /* del mes elegido, este edificio */
+  const enMes = x => { const t = x.clase === 'libre' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? new Date(x.fecha + 'T12:00:00') : (x.cuandoResp || x.t);
+    return t.getFullYear() === mes.y && t.getMonth() === mes.m; };
+  const delEd = SOL.lista.filter(x => x.ed === ed && !porAtender(x) && enMes(x));
+  const adel = delEd.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado');
+  const tot = new Map(); for(const x of adel){ const k = x.ci || x.guardia; const p = tot.get(k) || {n:x.guardia, s:0, c:0}; p.s += x.monto || 0; p.c++; tot.set(k, p); }
+  const libres = delEd.filter(x => x.clase === 'libre' && x.estado === 'aprobado');
+  const otros = delEd.filter(x => !adel.includes(x) && !libres.includes(x));
+  box.innerHTML = `
+    <div class="h2">Solicitudes por atender${atender.length ? ' (' + atender.length + ')' : ''}</div>
+    ${atender.length ? atender.map(x => itemSol(x, true)).join('') : '<div class="empty" style="padding:12px">No hay pedidos de adelanto ni de día libre por atender.</div>'}
+    <div class="h2">Adelantos confirmados · ${esc(ed)} · ${esc(mesTxt(mes))}</div>
+    ${tot.size ? `<div class="card sol">${[...tot.values()].sort((a,b) => a.n.localeCompare(b.n,'es')).map(p =>
+        `<div class="tl" style="padding:4px 0"><b>${esc(p.n)}</b><span>${p.c} adelanto${p.c === 1 ? '' : 's'} · <b>${esc(bsTxt(p.s))}</b></span></div>`).join('')}</div>`
+      : '<div class="empty" style="padding:12px">Sin adelantos confirmados en el mes.</div>'}
+    ${libres.length ? `<div class="h2">Días libres aprobados · ${esc(mesTxt(mes))}</div>${libres.map(x => itemSol(x, false)).join('')}` : ''}
+    ${(adel.length || otros.length) ? `<button class="btn more" id="sHist">${SOL.verHist ? 'Ocultar' : 'Ver'} detalle del mes (${adel.length + otros.length})</button>
+      ${SOL.verHist ? [...adel, ...otros].map(x => itemSol(x, false)).join('') : ''}` : ''}`;
+}
+
+/* Historial de un guardia (en su ficha): todo lo pedido en los últimos meses */
+async function historialSolGuardia(ed, g, mes){
+  const box = () => $('#gSolG');
+  SOL.ficha = {ed, g, mes};
+  try{ if(!SOL.cargado) await cargarSolicitudes(); }catch(_){}
+  if(!box()) return;
+  const suyas = SOL.lista.filter(x => x.ed === ed && (x.ci ? x.ci === g.ci : x.guardia === g.nombre));
+  if(!suyas.length){ box().innerHTML = '<div class="empty" style="padding:16px">No pidió adelantos ni días libres.</div>'; return; }
+  const delMes = suyas.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado' && (x.cuandoResp || x.t).getFullYear() === mes.y && (x.cuandoResp || x.t).getMonth() === mes.m);
+  const total = delMes.reduce((a, x) => a + (x.monto || 0), 0);
+  box().innerHTML = `<div class="msg">Adelantos confirmados en ${esc(mesTxt(mes))}: <b>${delMes.length ? esc(bsTxt(total)) : 'ninguno'}</b>${delMes.length > 1 ? ' (' + delMes.length + ')' : ''}</div>`
+    + suyas.map(x => itemSol(x, false)).join('');
+}
+
+async function responderSol(sid, estado){
+  const x = SOL.lista.find(s => s.sid === sid); if(!x) return;
+  const msg = t => { const m = document.querySelector(`[data-smsg="${CSS.escape(sid)}"]`); if(m) m.innerHTML = t ? `<div class="msg bad">${esc(t)}</div>` : ''; };
+  const det = {sid, estado, clase:x.clase, guardia:x.guardia, ci:x.ci, fecha:x.fecha};
+  if(estado === 'confirmado'){
+    const inp = document.querySelector(`[data-smonto="${CSS.escape(sid)}"]`);
+    const v = parseFloat(String(inp ? inp.value : x.montoGuardia).replace(',', '.'));
+    if(!(v > 0)) return msg('Escribe el monto que le diste.');
+    det.monto = v;
+  }
+  if(estado === 'no_entregado' && !confirm(`¿Marcar que NO le diste ${bsTxt(x.montoGuardia)} a ${x.guardia}? No contará como adelanto.`)) return;
+  document.querySelectorAll(`[data-sid="${CSS.escape(sid)}"]`).forEach(b => b.disabled = true);
+  try{
+    await apiEscribir('POST', 'eventos', nuevoEvento('Respuesta', x.ed, 'Supervisión', det));
+    await cargarSolicitudes();
+    if($('#gSolG') && SOL.ficha) historialSolGuardia(SOL.ficha.ed, SOL.ficha.g, SOL.ficha.mes);
+  }catch(e){
+    msg('No se pudo guardar: ' + e.message);
+    document.querySelectorAll(`[data-sid="${CSS.escape(sid)}"]`).forEach(b => b.disabled = false);
+  }
+}
+
+$('#panel').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-sact]');
+  if(b) responderSol(b.dataset.sid, b.dataset.sact);
+});
+$('#v-gua').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-sact]');
+  if(b){ ev.stopPropagation(); return responderSol(b.dataset.sid, b.dataset.sact); }
+  if(ev.target.id === 'sHist'){ SOL.verHist = !SOL.verHist; pintarSolicitudes(); }
+});
 
 /* ===================== INFORME MENSUAL EN PDF (solo supervisión) ===================== */
 const COLOR_MARCA = [73, 109, 127];          // #496d7f
@@ -2802,6 +3012,8 @@ $('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.r
     }
   }
   await refrescar();
+  /* pedidos de adelanto / día libre: número en "Guardias" (solo supervisión) */
+  if(ACC.modo !== 'admin'){ cargarSolicitudes(); setInterval(() => { if(!document.hidden) cargarSolicitudes(); }, 120000); }
   st.timer = setInterval(() => {
     if(document.hidden || vistaActual !== 'mov') return;
     if(ACC.modo === 'admin'){
