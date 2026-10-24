@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Barra de estado OPACA: en iPhone la página empieza DEBAJO de la hora y la batería,
+     así nada queda bajo el difuminado de iOS (requiere volver a agregar el ícono) -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Osiris Guardia">
 <meta name="theme-color" content="#496d7f">
 <title>Osiris Guardia</title>
@@ -125,6 +127,10 @@ input,select,textarea{font-size:max(16px,1em)}
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) * 1.7);background:var(--marca);z-index:9;pointer-events:none}
 header{padding-top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
 .camTop{padding-top:calc(env(safe-area-inset-top) * 1.7 + 12px)}
+/* flecha del gesto "deslizar desde el borde para volver" (app en la pantalla de inicio) */
+.volverG{position:fixed;left:0;top:50%;z-index:70;width:44px;height:44px;margin-top:-22px;border-radius:50%;background:#fff;color:#111827;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;pointer-events:none;transform:translateX(-50px)}
+.volverG.listo{background:var(--marca);color:#fff}
 </style>
 </head>
 <body>
@@ -1361,6 +1367,28 @@ function pConsultas(tab){
       if(!l.length || !d || d.estado !== 'ok') location.reload();
     }catch(_){}
   }, 60000);
+})();
+
+/* ---------- Deslizar desde el borde izquierdo para volver ----------
+   En la app de la pantalla de inicio el iPhone no tiene gesto de volver: se hace
+   aquí. Aparece una flecha; al soltar con la flecha de color, vuelve (o cierra la
+   cámara). En la primera pantalla no hace nada: no saca de la app. */
+(function(){
+  const app = (navigator.standalone === true) || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if(!app) return;
+  const f = document.createElement('div'); f.className = 'volverG'; f.innerHTML = icono('atras', 22);
+  document.body.appendChild(f);
+  let x0 = null, y0 = 0, dx = 0;
+  const puede = () => CAM_CERRAR || G.pila.length > 1;
+  addEventListener('touchstart', e => { const t = e.touches[0]; if(e.touches.length === 1 && t.clientX < 24 && puede()){ x0 = t.clientX; y0 = t.clientY; dx = 0; } else x0 = null; }, {passive:true});
+  addEventListener('touchmove', e => {
+    if(x0 === null) return; const t = e.touches[0];
+    dx = t.clientX - x0; if(Math.abs(t.clientY - y0) > 60 && dx < 30){ x0 = null; f.style.opacity = 0; return; }
+    const p = Math.max(0, Math.min(dx, 120));
+    f.style.opacity = Math.min(1, p / 60); f.style.transform = 'translateX(' + (p * 0.6 - 50) + 'px)'; f.classList.toggle('listo', p >= 80);
+  }, {passive:true});
+  const fin = () => { if(x0 !== null && dx >= 80){ if(CAM_CERRAR) CAM_CERRAR(); else volver(); } x0 = null; f.style.opacity = 0; f.style.transform = ''; f.classList.remove('listo'); };
+  addEventListener('touchend', fin, {passive:true}); addEventListener('touchcancel', () => { dx = 0; fin(); }, {passive:true});
 })();
 
 </script>

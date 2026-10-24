@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Barra de estado OPACA: en iPhone la página empieza DEBAJO de la hora y la batería,
+     así nada queda bajo el difuminado de iOS (requiere volver a agregar el ícono) -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Osiris">
 <meta name="theme-color" content="#0f1720">
 <meta property="og:title" content="Osiris · Monitor en línea">
@@ -90,7 +92,13 @@ main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px)}
 .kv span:last-child{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:500}
 .fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:12px}
 .fotos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--chip)}
-.close{float:right}
+/* "Cerrar" siempre a la vista: al bajar dentro de la ventana queda pegado arriba */
+.panel .close{position:sticky;top:0;z-index:3;display:block;width:max-content;margin:0 0 -40px auto;box-shadow:0 0 0 6px var(--card)}
+.panel h2{padding-right:96px}
+/* flecha del gesto "deslizar desde el borde para volver" (app en la pantalla de inicio) */
+.volverG{position:fixed;left:0;top:50%;z-index:60;width:44px;height:44px;margin-top:-22px;border-radius:50%;background:var(--card);color:var(--ink);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;pointer-events:none;transform:translateX(-50px)}
+.volverG.listo{background:var(--acc);color:var(--acc-ink)}
 .lb{position:fixed;inset:0;z-index:30;background:#000;display:none;align-items:center;justify-content:center}
 .lb.on{display:flex}
 .lb img{max-width:100%;max-height:100%;object-fit:contain}
@@ -275,6 +283,7 @@ const ICONOS = {
   check:'<path d="M20 6 9 17l-5-5"/>',
   cama:'<path d="M2 20V6M2 16h20M22 20v-6a3 3 0 0 0-3-3h-9v5"/><circle cx="6" cy="12" r="2"/>',
   punto:'<circle cx="12" cy="12" r="4"/>',
+  atras:'<path d="m15 18-6-6 6-6"/>',
   recargar:'<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'
 };
 function icono(k, t = 20){ return `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[k] || ICONOS.punto}</svg>`; }
@@ -2968,7 +2977,43 @@ async function editarGlink(d){
 }
 
 /* ---------- Navegación ---------- */
-function irA(v){
+/* ---------- Volver atrás (historial) ----------
+   Cada ventana emergente, foto y sección queda en el historial: "atrás" (gesto
+   del iPhone, botón de Android, o deslizar desde el borde izquierdo en la app
+   de la pantalla de inicio) cierra lo que está abierto o vuelve a la sección
+   anterior. En la primera pantalla no saca de la app. */
+const NAV = {pila:[], ignorar:0, desdeAtras:false};
+function navPush(e){ NAV.pila.push(e); try{ history.pushState({osiris: NAV.pila.length}, ''); }catch(_){} }
+/* cerrado desde la pantalla (botón Cerrar, tocar fuera): se descuenta su entrada */
+function navQuitar(tipo){
+  if(NAV.desdeAtras) return;
+  const i = NAV.pila.lastIndexOf(tipo); if(i < 0) return;
+  NAV.pila.splice(i, 1); NAV.ignorar++; try{ history.back(); }catch(_){ NAV.ignorar--; }
+}
+window.addEventListener('popstate', () => {
+  if(NAV.ignorar > 0){ NAV.ignorar--; return; }
+  const e = NAV.pila.pop(); if(!e) return;
+  NAV.desdeAtras = true;
+  try{
+    if(e === 'lb') $('#lb').classList.remove('on');
+    else if(e === 'sheet') $('#sheet').classList.remove('on');
+    else if(e.vista) irA(e.vista, true);
+  } finally { setTimeout(() => { NAV.desdeAtras = false; }, 0); }
+});
+(function(){
+  for(const [id, tipo] of [['#sheet','sheet'], ['#lb','lb']]){
+    let abierto = $(id).classList.contains('on');
+    new MutationObserver(() => {
+      const ahora = $(id).classList.contains('on');
+      if(ahora === abierto) return;
+      abierto = ahora;
+      if(ahora){ if(!NAV.desdeAtras) navPush(tipo); }
+      else navQuitar(tipo);
+    }).observe($(id), {attributes:true, attributeFilter:['class']});
+  }
+})();
+function irA(v, desdeAtras){
+  if(!desdeAtras && v !== vistaActual) navPush({vista: vistaActual});
   vistaActual = v;
   for(const x of ['mov','gua','bus','inf','edi','cfg']) $('#v-' + x).hidden = x !== v;
   [...$('#bnav').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
@@ -3055,6 +3100,26 @@ $('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.r
     }
     refrescar();
   }, REFRESCO_MS);
+})();
+
+/* ---------- Deslizar desde el borde izquierdo para volver ----------
+   Con el monitoreo guardado en la pantalla de inicio, el iPhone no tiene gesto
+   de volver: se hace aquí (aparece una flecha; al soltar con la flecha azul, vuelve). */
+(function(){
+  const app = (navigator.standalone === true) || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if(!app) return;
+  const f = document.createElement('div'); f.className = 'volverG'; f.innerHTML = icono('atras', 22);
+  document.body.appendChild(f);
+  let x0 = null, y0 = 0, dx = 0;
+  addEventListener('touchstart', e => { const t = e.touches[0]; if(e.touches.length === 1 && t.clientX < 24 && NAV.pila.length){ x0 = t.clientX; y0 = t.clientY; dx = 0; } else x0 = null; }, {passive:true});
+  addEventListener('touchmove', e => {
+    if(x0 === null) return; const t = e.touches[0];
+    dx = t.clientX - x0; if(Math.abs(t.clientY - y0) > 60 && dx < 30){ x0 = null; f.style.opacity = 0; return; }
+    const p = Math.max(0, Math.min(dx, 120));
+    f.style.opacity = Math.min(1, p / 60); f.style.transform = 'translateX(' + (p * 0.6 - 50) + 'px)'; f.classList.toggle('listo', p >= 80);
+  }, {passive:true});
+  const fin = () => { if(x0 !== null && dx >= 80) history.back(); x0 = null; f.style.opacity = 0; f.style.transform = ''; f.classList.remove('listo'); };
+  addEventListener('touchend', fin, {passive:true}); addEventListener('touchcancel', () => { dx = 0; fin(); }, {passive:true});
 })();
 
 </script>
