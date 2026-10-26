@@ -1340,7 +1340,7 @@ function diaLibreTxt(ymd){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || '')
 
 async function leerSolicitudes(){
   const desde = enc(new Date(Date.now() - SOL_DIAS*864e5).toISOString());
-  const rows = await paginas('eventos?select=edificio,guardia,detalle,created_at&tipo=in.(Solicitud,Respuesta)&created_at=gte.' + desde + '&order=created_at.asc');
+  const rows = await paginas('eventos?select=tipo,edificio,guardia,detalle,created_at&tipo=in.(Solicitud,Respuesta)&created_at=gte.' + desde + '&order=created_at.asc');
   const porSid = new Map(), montos = new Map(), resp = [];
   for(const e of rows){
     const d = detalleDe(e), sid = String(d.sid || ''); if(!sid) continue;
@@ -1403,6 +1403,7 @@ function itemSol(x, conEdificio){
       break;
     case 'aprobado':
       estado = x.clase === 'adelanto' ? 'Aprobado · falta que el guardia escriba el monto que recibió' : 'Aprobado';
+      acciones = `<div class="acts"><button class="btn" data-sact="rechazado" data-sid="${esc(x.sid)}">Cambiar a no aprobado</button></div>`;
       break;
     case 'por_confirmar':
       estado = `El guardia dice que recibió <b>${esc(bsTxt(x.montoGuardia))}</b>`;
@@ -1412,7 +1413,10 @@ function itemSol(x, conEdificio){
         <button class="btn" data-sact="no_entregado" data-sid="${esc(x.sid)}">No se lo di</button></div>`;
       break;
     case 'confirmado': estado = `Confirmado · <b>${esc(bsTxt(x.monto))}</b>`; break;
-    case 'rechazado': estado = 'No aprobado'; break;
+    case 'rechazado':
+      estado = 'No aprobado';
+      acciones = `<div class="acts"><button class="btn" data-sact="aprobado" data-sid="${esc(x.sid)}">Cambiar a aprobado</button></div>`;
+      break;
     case 'no_entregado': estado = 'No confirmado (no cuenta como adelanto)'; break;
   }
   return `<div class="card sol">
@@ -1903,7 +1907,8 @@ async function cargarAjustesEd(){
           <label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="aR2" type="time" value="${esc(relevosDe(M)[1] || '20:00')}"></label></div>
         <div style="font-size:13px;color:var(--mute);margin-top:6px">Horario de ingreso del edificio. Al cambiar el relevo 1, el 2 se pone 12 h después (turnos parejos). Los celulares con horario propio lo mantienen.</div>
         <label class="field"><span>Rondas cada (horas)</span><input id="aRonda" type="number" min="1" max="12" value="${+M.ronda_cada || 2}" inputmode="numeric"></label>
-        <label class="chk"><input type="checkbox" data-mod="alertas" ${M.alertas === true ? 'checked' : ''}> Avisarme por correo si no entra el guardia o falta una ronda</label>
+        <label class="chk"><input type="checkbox" data-mod="alertas" ${M.alertas !== false ? 'checked' : ''}> Avisarme por correo si el guardia no entra a su turno</label>
+        <label class="chk"><input type="checkbox" data-mod="alertas_ronda" ${M.alertas_ronda === true ? 'checked' : ''}> Avisarme por correo si falta una ronda</label>
         <div style="font-size:13px;color:var(--mute)">El aviso llega 30 minutos después del relevo o de la ronda que faltó.</div>
         <label class="field"><span>Tolerancia de relevo (minutos, 0 a 60)</span><input id="aTol" type="number" min="0" max="60" step="5" value="${Turnos.toleranciaDe(M)}" inputmode="numeric"></label>
         <div style="font-size:13px;color:var(--mute)">Hasta ese margen no cuenta; pasado el margen se cuentan todos los minutos.</div>
