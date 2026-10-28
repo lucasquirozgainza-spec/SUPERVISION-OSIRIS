@@ -12,21 +12,50 @@
 <meta property="og:title" content="Osiris · Monitor en línea">
 <meta property="og:description" content="Ingresos, salidas, rondas y novedades por edificio">
 <title>Osiris Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem('osiris_tema');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
 <style>
+/* ============ SISTEMA DE DISEÑO · tokens (claro por defecto, oscuro nativo) ============
+   Contraste WCAG medido sobre "surface": texto principal ≥ 15:1, secundario ≥ 5.9:1,
+   acento y estados ≥ 4.5:1 (AA para texto normal). */
 :root{
-  --bg:#f4f5f7; --card:#ffffff; --ink:#14171c; --mute:#727985; --line:#e7e9ee;
-  --acc:#2f6bff; --acc-ink:#fff; --chip:#eff1f5; --sombra:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);
-  --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --info:#0891b2; --violet:#7c3aed;
+  color-scheme: light;
+  --bg:#F5F6F8;        /* fondo de la app */
+  --card:#FFFFFF;      /* superficie (tarjetas, hojas) */
+  --chip:#EEF0F3;      /* superficie 2 (botones secundarios, chips) */
+  --line:#E3E6EB;      /* bordes y divisores */
+  --ink:#111418;       /* texto principal   18.5:1 */
+  --mute:#5B6472;      /* texto secundario   6.0:1 */
+  --acc:#2457E6;       /* acento             5.9:1 (texto blanco encima 5.9:1) */
+  --acc-ink:#FFFFFF;
+  --acc-suave:rgba(36,87,230,.10);
+  --ok:#127235; --warn:#A85A00; --bad:#C62828; --info:#0E7490; --violet:#6D28D9;
+  --sombra:0 1px 2px rgba(17,20,24,.04), 0 2px 8px rgba(17,20,24,.05);
+  --sombra-alta:0 12px 40px rgba(17,20,24,.18);
+  /* espacios (escala de 4) · radios · tipografía */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  --r-sm:10px; --r-md:14px; --r-lg:18px; --r-xl:22px;
+  --fuente:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0c0f14; --card:#161a21; --ink:#eceff4; --mute:#8a929f; --line:#232934;
-  --acc:#4c82ff; --chip:#1e232c; --sombra:none;
+    color-scheme: dark;
+    --bg:#0B0D11; --card:#15181E; --chip:#1E222A; --line:#2A2F38;
+    --ink:#ECEFF4;     /* 15.4:1 */
+    --mute:#9AA3B2;    /*  7.0:1 */
+    --acc:#6E97FF;     /*  6.4:1 (texto oscuro encima 7.0:1) */
+    --acc-ink:#0B0D11; --acc-suave:rgba(110,151,255,.14);
+    --ok:#4ADE80; --warn:#FBBF24; --bad:#F87171; --info:#22D3EE; --violet:#A78BFA;
+    --sombra:none; --sombra-alta:0 12px 40px rgba(0,0,0,.6);
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0c0f14; --card:#161a21; --ink:#eceff4; --mute:#8a929f; --line:#232934;
-  --acc:#4c82ff; --chip:#1e232c; --sombra:none;
+  color-scheme: dark;
+  --bg:#0B0D11; --card:#15181E; --chip:#1E222A; --line:#2A2F38;
+  --ink:#ECEFF4; --mute:#9AA3B2; --acc:#6E97FF; --acc-ink:#0B0D11; --acc-suave:rgba(110,151,255,.14);
+  --ok:#4ADE80; --warn:#FBBF24; --bad:#F87171; --info:#22D3EE; --violet:#A78BFA;
+  --sombra:none; --sombra-alta:0 12px 40px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);
@@ -194,87 +223,143 @@ header{padding-top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
 .lb .x{top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
 .panel{max-height:min(88dvh, calc(100dvh - env(safe-area-inset-top) * 1.7 - 20px))}
 
-/* ===================== v3: estilo moderno y minimalista ===================== */
-html,body{font-size:15px;letter-spacing:-.005em}
-header{background:color-mix(in srgb, var(--bg) 92%, transparent);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line);padding-bottom:10px}
+/* ===================== v4 · reglas de estilo ===================== */
+html,body{font-family:var(--fuente);font-size:15px;line-height:1.45;letter-spacing:-.006em;-webkit-font-smoothing:antialiased}
+main{max-width:860px;margin:0 auto;padding:var(--s4) var(--s4) calc(env(safe-area-inset-bottom) + var(--s5))}
+/* encabezado */
+header{background:var(--bg);background:color-mix(in srgb, var(--bg) 92%, transparent);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);
+  border-bottom:1px solid var(--line);padding-left:var(--s4);padding-right:var(--s4);padding-bottom:var(--s3)}
+.top{gap:var(--s3)}
 .brand{font-size:20px;font-weight:800;letter-spacing:-.02em}
-.brand small{font-size:12px;font-weight:500;margin-top:1px}
-.ibtn{width:40px;height:40px;padding:0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--card);border:1px solid var(--line);box-shadow:var(--sombra)}
-.row{gap:10px}
-select,.lockedEd{border-radius:14px;background-color:var(--card);box-shadow:var(--sombra)}
-.card{border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:var(--sombra)}
-.h2{font-size:12px;letter-spacing:.08em;margin:22px 4px 10px;font-weight:700}
-.btn{border-radius:12px;font-weight:600}
-.prim{border-radius:14px;padding:13px 16px;font-size:15px;box-shadow:0 1px 2px rgba(47,107,255,.25)}
-.tab{padding:8px 14px;font-weight:600}
-.stats{gap:8px}
-.stat{border-radius:12px;padding:10px 6px}
+.brand small{font-size:12px;font-weight:500;color:var(--mute);margin-top:2px}
+.live{font-size:12px;gap:6px}
+.row{gap:var(--s3);margin-top:var(--s3)}
+/* botones · padding horizontal = 2 × vertical, alto mínimo táctil 44 px */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:44px;padding:10px 20px;border:0;border-radius:var(--r-md);
+  background:var(--chip);color:var(--ink);font:inherit;font-size:15px;font-weight:600;line-height:1.2;text-align:center;cursor:pointer;transition:filter .15s, transform .05s}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.45}
+.prim{background:var(--acc);color:var(--acc-ink);font-weight:700;width:100%;min-height:50px;padding:14px 28px;border-radius:var(--r-md);box-shadow:none}
+.danger{background:var(--bad);color:#fff}
+.warnb{background:var(--warn);color:#fff}
+:root[data-theme="dark"] .danger,:root[data-theme="dark"] .warnb{color:#0B0D11}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .danger,:root:not([data-theme="light"]) .warnb{color:#0B0D11} }
+.ibtn{width:44px;height:44px;min-height:44px;padding:0;border-radius:var(--r-md);background:var(--card);border:1px solid var(--line);box-shadow:var(--sombra)}
+.panel .close{min-height:40px;padding:8px 16px;border-radius:999px}
+.more{min-height:48px;margin-top:var(--s3)}
+/* grupos de botones: siempre separados, nunca encimados */
+.acts{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s3)}
+.acts .btn{flex:1 1 140px}
+.fab{display:flex;gap:var(--s3);margin:0 0 var(--s4)}
+.fab .btn{flex:1}
+.prim + .prim,.btn + .prim,.prim + .btn{margin-top:var(--s3)}
+.acts > .btn + .btn,.fab > .btn + .btn{margin-top:0}
+/* chips y segmentados */
+.tabs{gap:var(--s2);margin-top:var(--s3)}
+.tab{min-height:36px;padding:8px 16px;border-radius:999px;font-size:14px;font-weight:600}
+.chips{gap:var(--s2);margin-top:var(--s3)}
+.seg{gap:var(--s2)}
+.seg button{min-height:44px;padding:10px 20px}
+.segm{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--chip);border-radius:var(--r-md);padding:4px;margin:0 0 var(--s4)}
+.segm button{border:0;background:none;color:var(--mute);font:inherit;font-weight:600;font-size:14px;min-height:40px;padding:8px 12px;border-radius:11px;white-space:nowrap}
+.segm button.on{background:var(--card);color:var(--ink);font-weight:700;box-shadow:var(--sombra)}
+/* campos */
+select,.lockedEd{border-radius:var(--r-md);background-color:var(--card);box-shadow:var(--sombra)}
+.inp,.field input,.field select,.row select,.row input,textarea{border-radius:var(--r-md)}
+.field{margin:var(--s3) 0}
+.field span{font-size:13px;font-weight:500;margin-bottom:6px}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.dos .field{margin:var(--s3) 0}
+textarea{box-sizing:border-box;width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:12px 14px;font:inherit;min-height:84px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,.btn:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.chk{gap:var(--s3);padding:var(--s3) 0}
+/* superficies */
+.card{border-radius:var(--r-lg);padding:var(--s4);margin-bottom:var(--s3);box-shadow:var(--sombra)}
+.h2{font-size:12px;letter-spacing:.08em;margin:var(--s5) 4px var(--s3);font-weight:700;color:var(--mute)}
+.msg{border-radius:var(--r-md);padding:var(--s3) var(--s4);margin:var(--s3) 0}
+.empty{padding:var(--s6) var(--s4);font-size:14px}
+.stats{gap:var(--s2);margin-top:var(--s3)}
+.stat{border-radius:var(--r-sm);padding:var(--s3) var(--s2)}
 .stat b{font-size:17px}
-.msg{border-radius:12px}
-main{max-width:860px;margin:0 auto}
-/* acordeones ("menús desplegables") */
-details.acc{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:10px;box-shadow:var(--sombra);overflow:hidden}
-details.acc > summary{list-style:none;display:flex;align-items:center;gap:12px;padding:15px 16px;font-weight:700;cursor:pointer;user-select:none}
+.badge{padding:3px 9px}
+/* acordeones */
+details.acc{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:var(--s3);box-shadow:var(--sombra);overflow:hidden}
+details.acc > summary{list-style:none;display:flex;align-items:center;gap:var(--s3);min-height:64px;padding:var(--s3) var(--s4);font-weight:700;cursor:pointer;user-select:none}
 details.acc > summary::-webkit-details-marker{display:none}
-details.acc > summary .sic{flex:0 0 34px;height:34px;border-radius:10px;background:var(--chip);color:var(--acc);display:grid;place-items:center}
+details.acc > summary .sic{flex:0 0 36px;height:36px;border-radius:var(--r-sm);background:var(--acc-suave);color:var(--acc);display:grid;place-items:center}
 details.acc > summary .st{flex:1;min-width:0}
-details.acc > summary .st small{display:block;font-weight:500;color:var(--mute);font-size:12.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-details.acc > summary::after{content:'';flex:0 0 8px;height:8px;border-right:2px solid var(--mute);border-bottom:2px solid var(--mute);transform:rotate(45deg);margin:-4px 4px 0 0;transition:transform .2s}
+details.acc > summary .st small{display:block;font-weight:500;color:var(--mute);font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.acc > summary::after{content:'';flex:0 0 8px;height:8px;border-right:2px solid var(--mute);border-bottom:2px solid var(--mute);transform:rotate(45deg);margin:-4px 6px 0 0;transition:transform .2s}
 details.acc[open] > summary::after{transform:rotate(-135deg);margin-top:4px}
-details.acc > .accb{padding:0 16px 16px;border-top:1px solid var(--line)}
-details.acc > .accb > :first-child{margin-top:12px}
-/* ayuda plegada: el texto largo no estorba */
-details.info{margin:8px 0 2px;color:var(--mute);font-size:13.5px}
-details.info > summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;font-size:13px}
+details.acc > .accb{padding:0 var(--s4) var(--s4);border-top:1px solid var(--line)}
+details.acc > .accb > :first-child{margin-top:var(--s4)}
+/* ayuda: solo un ícono; el texto aparece al tocarlo (tool-tip) */
+details.info{position:relative;display:block;margin:var(--s2) 0;color:var(--mute);font-size:13.5px}
+details.info > summary{list-style:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:4px 12px 4px 8px;border-radius:999px;
+  background:var(--chip);color:var(--mute);cursor:pointer;font-weight:600;font-size:13px}
 details.info > summary::-webkit-details-marker{display:none}
-details.info > div{margin-top:6px;line-height:1.45}
-/* selector de sección (desplegable) */
-.secsel{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+details.info.tip > summary{width:32px;padding:0;font-size:0;gap:0}
+details.info.tip{display:flex;flex-direction:column;align-items:flex-end}
+details.info.tip > div{align-self:stretch}
+details.info.tip > summary svg{width:16px;height:16px}
+details.info > div{margin-top:var(--s2);padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--card);border:1px solid var(--line);box-shadow:var(--sombra);line-height:1.5;color:var(--ink);font-size:13.5px}
+/* selector de sección */
+.secsel{display:flex;gap:var(--s3);margin-bottom:var(--s4)}
 .secsel select{flex:1}
-/* segmentado */
-.segm{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--chip);border-radius:14px;padding:4px;margin-bottom:14px}
-.segm button{border:0;background:none;color:var(--mute);font:inherit;font-weight:700;font-size:13.5px;padding:9px 4px;border-radius:11px}
-.segm button.on{background:var(--card);color:var(--ink);box-shadow:var(--sombra)}
-/* tarjetas de cifras simétricas */
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px;box-shadow:var(--sombra);text-align:center}
-.kpi b{display:block;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi small{display:block;color:var(--mute);font-size:11.5px;margin-top:2px}
-/* listas limpias */
-.lista{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sombra);overflow:hidden;margin-bottom:12px}
-.it{display:flex;align-items:center;gap:12px;padding:13px 14px;border-top:1px solid var(--line);cursor:pointer}
+/* cifras */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3);margin-bottom:var(--s4)}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s2);box-shadow:var(--sombra);text-align:center;min-width:0}
+.kpi b{display:block;font-size:15.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+/* listas */
+.lista{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sombra);overflow:hidden;margin-bottom:var(--s4)}
+.it{display:flex;align-items:center;gap:var(--s3);min-height:64px;padding:var(--s3) var(--s4);border-top:1px solid var(--line);cursor:pointer}
 .it:first-child{border-top:0}
 .it .t{flex:1;min-width:0}
-.it .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.it .t small{display:block;color:var(--mute);font-size:12.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .t b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .t small{display:block;color:var(--mute);font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .it .v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.it .v small{display:block;font-weight:600;font-size:11.5px}
-.pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--chip);color:var(--mute)}
-.pill.ok{background:rgba(22,163,74,.12);color:var(--ok)} .pill.warn{background:rgba(217,119,6,.13);color:var(--warn)}
-.fab{display:flex;gap:8px;margin-bottom:12px}
-.fab .btn{flex:1;height:46px}
-/* navegación inferior: 5 botones */
-.bnav{background:color-mix(in srgb, var(--card) 94%, transparent);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px)}
-.bnav button{font-size:11px;padding:7px 2px 5px}
-.bnav button.on .nico{background:color-mix(in srgb, var(--acc) 14%, transparent);border-radius:999px}
-.bnav .nico{width:52px;height:28px;border-radius:999px;transition:background .2s}
+.it .v small{display:block;margin-top:4px}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--chip);color:var(--mute)}
+.pill.ok{background:color-mix(in srgb, var(--ok) 14%, transparent);color:var(--ok)}
+.pill.warn{background:color-mix(in srgb, var(--warn) 16%, transparent);color:var(--warn)}
+/* eventos en vivo */
+.ev{gap:var(--s3)}
+.ic{flex:0 0 40px;height:40px;border-radius:12px}
+.day{margin:var(--s5) 4px var(--s3)}
+/* hoja inferior */
+.sheet{background:rgba(8,10,14,.45)}
+.panel{border-radius:var(--r-xl) var(--r-xl) 0 0;padding:var(--s5) var(--s4) calc(env(safe-area-inset-bottom) + var(--s5));box-shadow:var(--sombra-alta)}
+.panel h2{font-size:20px;letter-spacing:-.015em;margin-bottom:4px}
+.panel .sub{margin-bottom:var(--s4)}
+.kv{padding:var(--s3) 0}
+/* barra inferior */
+body{padding-bottom:calc(env(safe-area-inset-bottom) + 76px)}
+.bnav{background:var(--card);background:color-mix(in srgb, var(--card) 94%, transparent);-webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);
+  padding:6px var(--s2) calc(env(safe-area-inset-bottom) + 6px)}
+.bnav button{font-size:11px;font-weight:600;padding:4px 2px;gap:4px;min-height:52px}
+.bnav .nico{width:56px;height:30px;border-radius:999px;transition:background .2s}
+.bnav button.on{color:var(--acc)}
+.bnav button.on .nico{background:var(--acc-suave)}
 /* menú "Más" */
-.menu{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
-.menu button{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:16px 6px;font:inherit;font-weight:700;font-size:13px;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:var(--sombra)}
-.menu button .sic{width:40px;height:40px;border-radius:12px;background:var(--chip);color:var(--acc);display:grid;place-items:center}
+.menu{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3);margin-top:var(--s2)}
+.menu button{border:1px solid var(--line);background:var(--card);border-radius:var(--r-lg);padding:var(--s4) var(--s2);font:inherit;font-weight:600;font-size:13.5px;color:var(--ink);
+  display:flex;flex-direction:column;align-items:center;gap:var(--s2);box-shadow:var(--sombra);min-height:96px}
+.menu button .sic{width:44px;height:44px;border-radius:var(--r-md);background:var(--acc-suave);color:var(--acc);display:grid;place-items:center}
 .menu button.on{border-color:var(--acc)}
-/* vista previa de PDF */
-.prevCaja{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.18);min-height:120px;margin-top:6px}
+/* cobros */
+.prevCaja{background:#fff;border-radius:var(--r-md);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.18);min-height:120px;margin-top:var(--s2)}
 .prev{display:block;width:100%;border:0;background:#fff}
-.item{display:grid;grid-template-columns:1fr 1fr 44px;gap:8px;align-items:end;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.item{display:grid;grid-template-columns:1fr 1fr 44px;gap:var(--s3);align-items:end;margin-bottom:var(--s3);padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
 .item .det{grid-column:1 / -1}
 .item .field{margin:0}
-.item .x{height:46px;padding:0}
-.total{display:flex;justify-content:space-between;align-items:baseline;font-weight:800;font-size:18px;margin-top:4px}
-.lit{color:var(--mute);font-size:12.5px;margin-top:2px}
-.dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.dos .field{margin:10px 0}
-textarea{box-sizing:border-box;width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 12px;font:inherit;min-height:70px;resize:vertical}
+.item .x{width:44px;height:46px;min-height:46px;padding:0}
+.total{display:flex;justify-content:space-between;align-items:baseline;font-weight:800;font-size:18px}
+.lit{color:var(--mute);font-size:12.5px;margin-top:4px}
+/* tema */
+.temas{margin:0}
+/* pantallas angostas: dos columnas en cifras de 4 */
+@media (max-width:360px){ .stats{grid-template-columns:repeat(2,1fr)} .kpi b{font-size:14px} }
 </style>
 </head>
 <body>
@@ -385,7 +470,7 @@ const ICONOS = {
   recargar:'<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'
 };
 /* Ayuda plegada: el texto largo queda escondido hasta que lo pidan */
-function info(html, titulo = 'Cómo funciona'){ return `<details class="info"><summary>${icono('info', 15)} ${esc(titulo)}</summary><div>${html}</div></details>`; }
+function info(html, titulo = 'Ayuda'){ return `<details class="info tip"><summary aria-label="${esc(titulo)}" title="${esc(titulo)}">${icono('info', 16)}</summary><div>${html}</div></details>`; }
 /* Sección desplegable con ícono, título y una línea de resumen */
 function acc(ico, titulo, resumen, cuerpo, abierto = false){
   return `<details class="acc"${abierto ? ' open' : ''}><summary><span class="sic">${icono(ico, 18)}</span><span class="st">${esc(titulo)}${resumen ? `<small>${resumen}</small>` : ''}</span></summary><div class="accb">${cuerpo}</div></details>`;
@@ -1365,8 +1450,8 @@ function formGuardia(){
   let turno = 'DIURNO';
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
     <h2>Registrar guardia</h2><div class="sub">${esc(D.ed)}</div>
-    <label class="field"><span>Nombre completo</span><input id="fNom" autocomplete="off" autocapitalize="words"></label>
-    <label class="field"><span>CI (carnet) — será su ID</span><input id="fCi" autocomplete="off" inputmode="text" autocapitalize="characters"></label>
+    <label class="field"><span>Nombre</span><input id="fNom" autocomplete="off" autocapitalize="words"></label>
+    <label class="field"><span>CI</span><input id="fCi" autocomplete="off" inputmode="text" autocapitalize="characters"></label>
     <div class="field"><span>Turno</span><div class="seg" id="fTur">
       <button class="btn on" data-t="DIURNO">Diurno</button><button class="btn" data-t="NOCTURNO">Nocturno</button><button class="btn" data-t="FRANQUERO">Franquero</button></div></div>
     ${D.cfg.torres.length ? `<label class="field"><span>Bloque / torre</span><select id="fBlo">${D.cfg.torres.map(t => `<option>${esc(t)}</option>`).join('')}</select></label>` : ''}
@@ -1482,8 +1567,8 @@ function eliminarGuardia(g){
   const D = GU.datos;
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cancelar</button>
     <h2>Eliminar a ${esc(g.nombre)}</h2><div class="sub">${esc(D.ed)} · ID ${esc(g.ci)}</div>
-    <div class="msg">Se quita de la lista de guardias de este edificio y de todos sus celulares. Si solo dejó de trabajar, mejor usa <b>Dar de baja</b> (conserva todo).</div>
-    <label class="chk"><input type="checkbox" id="eDatos"> Borrar también TODOS sus registros de este edificio en la nube (ingresos, salidas, rondas, visitas…). No se puede deshacer.</label>
+    <div class="msg">Si solo dejó de trabajar, usa <b>Dar de baja</b>.</div>
+    <label class="chk"><input type="checkbox" id="eDatos"> Borrar también sus registros (no se puede deshacer)</label>
     <label class="field"><span>Para confirmar escribe su CI: ${esc(g.ci)}</span><input id="eCi" autocomplete="off" autocapitalize="characters"></label>
     <div id="eMsg"></div>
     <button class="btn danger prim" id="eOk">Eliminar definitivamente</button>`;
@@ -1619,13 +1704,13 @@ function pintarSolicitudes(){
   const libres = delEd.filter(x => x.clase === 'libre' && x.estado === 'aprobado');
   const otros = delEd.filter(x => !adel.includes(x) && !libres.includes(x));
   box.innerHTML = `
-    <div class="h2">Solicitudes por atender${atender.length ? ' (' + atender.length + ')' : ''}</div>
-    ${atender.length ? atender.map(x => itemSol(x, true)).join('') : '<div class="empty" style="padding:12px">No hay pedidos de adelanto ni de día libre por atender.</div>'}
-    <div class="h2">Adelantos confirmados · ${esc(ed)} · ${esc(mesTxt(mes))}</div>
+    <div class="h2">Pendientes${atender.length ? ' (' + atender.length + ')' : ''}</div>
+    ${atender.length ? atender.map(x => itemSol(x, true)).join('') : '<div class="empty" style="padding:12px">Sin pendientes.</div>'}
+    <div class="h2">Adelantos del mes</div>
     ${tot.size ? `<div class="card sol">${[...tot.values()].sort((a,b) => a.n.localeCompare(b.n,'es')).map(p =>
         `<div class="tl" style="padding:4px 0"><b>${esc(p.n)}</b><span>${p.c} adelanto${p.c === 1 ? '' : 's'} · <b>${esc(bsTxt(p.s))}</b></span></div>`).join('')}</div>`
       : '<div class="empty" style="padding:12px">Sin adelantos confirmados en el mes.</div>'}
-    ${libres.length ? `<div class="h2">Días libres aprobados · ${esc(mesTxt(mes))}</div>${libres.map(x => itemSol(x, false)).join('')}` : ''}
+    ${libres.length ? `<div class="h2">Días libres del mes</div>${libres.map(x => itemSol(x, false)).join('')}` : ''}
     ${(adel.length || otros.length) ? `<button class="btn more" id="sHist">${SOL.verHist ? 'Ocultar' : 'Ver'} detalle del mes (${adel.length + otros.length})</button>
       ${SOL.verHist ? [...adel, ...otros].map(x => itemSol(x, false)).join('') : ''}` : ''}`;
 }
@@ -1916,6 +2001,8 @@ const Cobros = (() => {
     c.querySelector('#fEd').onchange = e => { C.fEd = e.target.value; repintar(); };
     c.querySelector('#fMes').onchange = e => { C.fMes = e.target.value; repintar(); };
   }
+  /* cifras compactas: sin centavos si son cero (el "Bs" va en la etiqueta) */
+  const bsK = n => { const v = Math.round((+n || 0) * 100) / 100; return Number.isInteger(v) ? v.toLocaleString('es-BO') : bs(v); };
   const kpis = l => `<div class="kpis">${l.map(([v, t]) => `<div class="kpi"><b>${v}</b><small>${t}</small></div>`).join('')}</div>`;
 
   /* --- Notas --- */
@@ -1924,7 +2011,7 @@ const Cobros = (() => {
     const ver = C.notas.filter(n => (!C.fEd || (n.cliente && n.cliente.nombre === C.fEd)) && (!C.fMes || n.periodo === C.fMes));
     const total = ver.reduce((a, n) => a + (+n.total || 0), 0), cobrado = ver.reduce((a, n) => a + Math.min(pagado(n), +n.total || 0), 0);
     c.innerHTML = `${filtros(meses)}
-      ${kpis([['Bs ' + bs(total), 'Emitido'], ['Bs ' + bs(cobrado), 'Cobrado'], ['Bs ' + bs(total - cobrado), 'Por cobrar']])}
+      ${kpis([[bsK(total), 'Emitido · Bs'], [bsK(cobrado), 'Cobrado · Bs'], [bsK(total - cobrado), 'Por cobrar · Bs']])}
       <div class="fab"><button class="btn prim" id="nNueva">${icono('mas1', 16)} Nueva nota</button></div>
       <div class="lista">${ver.length ? ver.map(n => { const [et, cl] = estado(n);
         return `<div class="it" data-nota="${n.numero}"><div class="t"><b>N° ${num4(n.numero)} · ${esc(n.cliente ? n.cliente.nombre : '')}</b><small>${esc(periodoTxt(n.periodo))} · ${esc(fechaCorta(n.fecha))}</small></div>
@@ -1937,7 +2024,7 @@ const Cobros = (() => {
   function verNota(n){
     const [et, cl] = estado(n), recs = recibosDe(n.numero);
     hoja(`<h2>Nota N° ${num4(n.numero)}</h2><div class="sub">${esc(n.cliente ? n.cliente.nombre : '')} · ${esc(periodoTxt(n.periodo))}</div>
-      ${kpis([['Bs ' + bs(n.total), 'Total'], ['Bs ' + bs(pagado(n)), 'Cobrado'], [`<span class="pill ${cl}">${et}</span>`, 'Estado']])}
+      ${kpis([[bsK(n.total), 'Total · Bs'], [bsK(pagado(n)), 'Cobrado · Bs'], [`<span class="pill ${cl}">${et}</span>`, 'Estado']])}
       <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button>${saldo(n) > 0 ? '<button class="btn prim" id="vCob" style="background:var(--ok)">Registrar cobro</button>' : ''}</div>
       ${recs.length ? `<div class="h2">Recibos</div><div class="lista">${recs.map(r => `<div class="it" data-rec="${r.numero}"><div class="t"><b>Recibo N° ${num4(r.numero)}</b><small>${esc(fechaCorta(r.fecha))} · ${esc(r.forma)}</small></div><div class="v">Bs ${bs(r.monto)}</div></div>`).join('')}</div>` : ''}
       <div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div><div id="vMsg"></div>`);
@@ -1954,11 +2041,11 @@ const Cobros = (() => {
     const lineaBase = (cid, p) => ({detalle: `${(cli(cid) && cli(cid).concepto) || CONCEPTO_DEF} - ${periodoTxt(p)}`, cant: 1, precio: cli(cid) && cli(cid).monto !== '' ? +cli(cid).monto : ''});
     const n = {cid: (C.fEd && lista.find(x => x.nombre === C.fEd) || lista[0]).cid, numero: sigNota(), fecha: ymd(hoy), periodo: per, obs: '', firma: true};
     n.items = [lineaBase(n.cid, per)];
-    hoja(`<h2>Nueva nota</h2><div class="sub">Se numera sola. Revisa y genera el PDF.</div>
+    hoja(`<h2>Nueva nota</h2>
       <label class="field"><span>Edificio</span><select id="nCli">${lista.map(x => `<option value="${esc(x.cid)}" ${x.cid === n.cid ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>
       <div class="dos"><label class="field"><span>N°</span><input id="nNum" inputmode="numeric" value="${n.numero}"></label>
         <label class="field"><span>Fecha</span><input id="nFec" type="date" value="${n.fecha}"></label></div>
-      <label class="field"><span>Mes que se cobra</span><select id="nPer">${meses.reverse().map(p => `<option value="${p}" ${p === per ? 'selected' : ''}>${esc(periodoTxt(p))}</option>`).join('')}</select></label>
+      <label class="field"><span>Mes</span><select id="nPer">${meses.reverse().map(p => `<option value="${p}" ${p === per ? 'selected' : ''}>${esc(periodoTxt(p))}</option>`).join('')}</select></label>
       <div class="h2">Detalle</div><div id="nItems"></div>
       <button class="btn" id="nMas" style="width:100%;height:44px">${icono('mas1', 15)} Agregar línea</button>
       <div class="card" style="margin-top:12px"><div class="total"><span>Total</span><span id="nTot"></span></div><div class="lit" id="nLit"></div></div>
@@ -2016,7 +2103,7 @@ const Cobros = (() => {
     const cobrado = ver.reduce((a, r) => a + (+r.monto || 0), 0);
     const pend = C.notas.filter(n => saldo(n) > 0 && (!C.fEd || (n.cliente && n.cliente.nombre === C.fEd)));
     c.innerHTML = `${filtros(meses)}
-      ${kpis([[String(ver.length), 'Recibos'], ['Bs ' + bs(cobrado), 'Cobrado'], ['Bs ' + bs(pend.reduce((a, n) => a + saldo(n), 0)), 'Por cobrar']])}
+      ${kpis([[String(ver.length), 'Recibos'], [bsK(cobrado), 'Cobrado · Bs'], [bsK(pend.reduce((a, n) => a + saldo(n), 0)), 'Por cobrar · Bs']])}
       <div class="fab"><button class="btn prim" id="rNuevo">${icono('mas1', 16)} Nuevo recibo</button></div>
       <div class="lista">${ver.length ? ver.map(r => `<div class="it" data-rec="${r.numero}"><div class="t"><b>N° ${num4(r.numero)} · ${esc(r.cliente ? r.cliente.nombre : r.de)}</b>
           <small>${esc(fechaCorta(r.fecha))} · ${esc(r.forma)}${r.nota ? ' · Nota ' + num4(r.nota) : ''}</small></div><div class="v">Bs ${bs(r.monto)}</div></div>`).join('')
@@ -2027,7 +2114,7 @@ const Cobros = (() => {
   }
   function verRecibo(r){
     hoja(`<h2>Recibo N° ${num4(r.numero)}</h2><div class="sub">${esc(r.cliente ? r.cliente.nombre : r.de)} · ${esc(fechaLarga(r.fecha))}</div>
-      ${kpis([['Bs ' + bs(r.monto), 'Monto'], [esc(r.forma.split(' ')[0]), 'Forma'], [r.nota ? num4(r.nota) : '—', 'Nota']])}
+      ${kpis([[bsK(r.monto), 'Monto · Bs'], [esc(r.forma.split(' ')[0]), 'Forma'], [r.nota ? num4(r.nota) : '—', 'Nota']])}
       <button class="btn prim" id="vPdf">Ver PDF</button><div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div>`);
     pdfListo().then(ok => { if(ok) previa($('#vPrev'), () => pdfRecibo(r)); });
     $('#vPdf').onclick = () => { if(window.jspdf) compartir(pdfRecibo(r), nombreRecibo(r)); };
@@ -2043,15 +2130,15 @@ const Cobros = (() => {
     };
     aplicarNota();
     const opNotas = pend.map(n => `<option value="${n.numero}" ${+n.numero === +r.nota ? 'selected' : ''}>N° ${num4(n.numero)} · ${esc(n.cliente ? n.cliente.nombre : '')} · saldo Bs ${bs(saldo(n))}</option>`).join('');
-    hoja(`<div id="rForm"><h2>Nuevo recibo</h2><div class="sub">Constancia de un pago recibido.</div>
-      <label class="field"><span>Nota que se paga</span><select id="rNota">${opNotas}<option value="" ${r.nota ? '' : 'selected'}>Sin nota (otro pago)</option></select></label>
+    hoja(`<div id="rForm"><h2>Nuevo recibo</h2>
+      <label class="field"><span>Nota</span><select id="rNota">${opNotas}<option value="" ${r.nota ? '' : 'selected'}>Sin nota (otro pago)</option></select></label>
       <label class="field" id="rCliBox" ${r.nota ? 'hidden' : ''}><span>Cliente</span><select id="rCli">${clientes().map(c => `<option value="${esc(c.cid)}">${esc(c.nombre)}</option>`).join('')}</select></label>
       <div class="dos"><label class="field"><span>N°</span><input id="rNum" inputmode="numeric" value="${r.numero}"></label>
         <label class="field"><span>Fecha</span><input id="rFec" type="date" value="${r.fecha}"></label></div>
       <div class="dos"><label class="field"><span>Monto (Bs)</span><input id="rMon" inputmode="decimal" value="${esc(r.monto)}"></label>
         <label class="field"><span>Forma de pago</span><select id="rFor">${FORMAS.map(f => `<option>${f}</option>`).join('')}</select></label></div>
       <label class="field"><span>Referencia (opcional)</span><input id="rRef" placeholder="N° de operación"></label>
-      <details class="info"><summary>${icono('mas1', 14)} Recibí de y concepto</summary><div>
+      <details class="info"><summary>${icono('mas1', 14)} Detalle</summary><div>
         <label class="field"><span>Recibí de</span><input id="rDe" value="${esc(r.de)}"></label>
         <label class="field"><span>Por concepto de</span><textarea id="rCon">${esc(r.concepto)}</textarea></label></div></details>
       <label class="chk" style="border:0"><input type="checkbox" id="rFir" checked> Con firma y sello</label>
@@ -2099,21 +2186,21 @@ const Cobros = (() => {
     c.innerHTML = `<div class="fab"><button class="btn prim" id="cNuevo">${icono('mas1', 16)} Registrar edificio</button></div>
       <div class="lista">${l.length ? l.map(x => `<div class="it" data-cli="${esc(x.cid)}"><div class="t"><b>${esc(x.nombre)}</b><small>${esc(x.direccion || x.razon || 'Sin dirección')}</small></div>
         <div class="v">${x.monto !== '' && x.monto != null ? 'Bs ' + bs(x.monto) : '—'}<small style="color:var(--mute)">al mes</small></div></div>`).join('')
-        : '<div class="empty">Registra cada edificio una sola vez.</div>'}</div>`;
+        : '<div class="empty">Sin edificios.</div>'}</div>`;
     c.querySelector('#cNuevo').onclick = () => formCliente();
     c.querySelectorAll('[data-cli]').forEach(el => el.onclick = () => formCliente(C.clientes.get(el.dataset.cli)));
   }
   function formCliente(x){
-    hoja(`<h2>${x ? esc(x.nombre) : 'Registrar edificio'}</h2><div class="sub">${x ? 'Editar datos' : 'Se hace una sola vez'}</div>
-      ${campo('kNom', 'Nombre del edificio', x ? x.nombre : '', 'list="kEds" autocapitalize="words"')}
+    hoja(`<h2>${x ? esc(x.nombre) : 'Registrar edificio'}</h2>
+      ${campo('kNom', 'Edificio', x ? x.nombre : '', 'list="kEds" autocapitalize="words"')}
       <datalist id="kEds">${C.edificios.map(e => `<option value="${esc(e)}">`).join('')}</datalist>
       <div class="dos">${campo('kMon', 'Monto mensual (Bs)', x ? x.monto : '', 'inputmode="decimal"')}${campo('kNit', 'NIT o CI', x ? x.nit : '')}</div>
       ${campo('kDir', 'Dirección', x ? x.direccion : '')}
       <details class="info"><summary>${icono('mas1', 14)} Más datos</summary><div>
-        ${campo('kRaz', 'A nombre de (razón social)', x ? x.razon : '', 'autocapitalize="words"')}
+        ${campo('kRaz', 'Razón social', x ? x.razon : '', 'autocapitalize="words"')}
         ${campo('kCiu', 'Ciudad', x ? x.ciudad : 'Santa Cruz de la Sierra')}
         <div class="dos">${campo('kCon', 'Contacto', x ? x.contacto : '', 'autocapitalize="words"')}${campo('kTel', 'Teléfono', x ? x.telefono : '', 'inputmode="tel"')}</div>
-        ${campo('kCto', 'Concepto que se cobra', x ? x.concepto : CONCEPTO_DEF)}</div></details>
+        ${campo('kCto', 'Concepto', x ? x.concepto : CONCEPTO_DEF)}</div></details>
       <div id="kMsg"></div>
       <div class="acts" style="margin-top:12px">${x ? '<button class="btn" id="kDel" style="color:var(--bad)">Quitar</button>' : ''}<button class="btn prim" id="kOk">Guardar</button></div>`);
     $('#kOk').onclick = async () => {
@@ -2144,14 +2231,14 @@ const Cobros = (() => {
         `${campo('eNom', 'Nombre', e.nombre)}<div class="dos">${campo('eNit', 'NIT', e.nit)}${campo('eTel', 'Teléfono', e.telefono, 'inputmode="tel"')}</div>
          ${campo('eDir', 'Dirección', e.direccion)}<div class="dos">${campo('eCor', 'Correo', e.correo, 'autocapitalize="off"')}${campo('eWeb', 'Web', e.web, 'autocapitalize="off"')}</div>`, !e.nit)}
       ${acc('candado', 'Firma', esc(e.firmante ? e.firmante + (e.cargo ? ' · ' + e.cargo : '') : 'Firma y sello de Osiris'),
-        `<div class="dos">${campo('eFir', 'Nombre de quien firma', e.firmante, 'autocapitalize="words"')}${campo('eCar', 'Cargo', e.cargo, 'placeholder="Gerente General"')}</div>
+        `<div class="dos">${campo('eFir', 'Firmante', e.firmante, 'autocapitalize="words"')}${campo('eCar', 'Cargo', e.cargo, 'placeholder="Gerente General"')}</div>
          <div class="prevCaja" style="padding:12px;display:flex;align-items:center;justify-content:center;gap:10px"><img src="${FIRMA}" alt="Firma" style="height:46px"><img src="${SELLO}" alt="Sello" style="height:70px"></div>`)}
       ${acc('cobros', 'Pago y plazo', esc(e.banco ? e.banco + ' · ' + e.cuenta : 'Sin cuenta bancaria') + (e.plazo ? ' · ' + esc(e.plazo) + ' días' : ''),
         `<div class="dos">${campo('eBan', 'Banco', e.banco)}${campo('eCta', 'N° de cuenta', e.cuenta, 'inputmode="numeric"')}</div>
          ${campo('eTit', 'A nombre de', e.titular)}
-         <div class="dos">${campo('ePla', 'Plazo de pago (días)', e.plazo, 'inputmode="numeric" placeholder="Ej. 10"')}<div></div></div>
-         <label class="field"><span>Texto al pie (opcional)</span><textarea id="ePie">${esc(e.pie)}</textarea></label>
-         ${sw('eLey', 'Aclarar "Este documento no es una factura"', e.leyenda !== false)}`)}
+         <div class="dos">${campo('ePla', 'Plazo (días)', e.plazo, 'inputmode="numeric" placeholder="Ej. 10"')}<div></div></div>
+         <label class="field"><span>Pie de página</span><textarea id="ePie">${esc(e.pie)}</textarea></label>
+         ${sw('eLey', 'Mostrar "No es factura"', e.leyenda !== false)}`)}
       <div id="eMsg"></div><button class="btn prim" id="eOk">Guardar</button>`;
     c.querySelector('#eOk').onclick = async () => {
       const v = id => $('#' + id).value.trim();
@@ -2219,7 +2306,6 @@ function pintarInforme(){
       <label class="chk"><input type="checkbox" id="iVacias" ${P.vacias ? 'checked' : ''}> Quitar solas las columnas que ese mes están vacías</label>
     </div>
     <div class="h2">Secciones y columnas</div>
-    <div style="font-size:13px;color:var(--mute);margin:-4px 2px 8px">Toca una sección para elegir sus columnas. Se recuerda para este edificio.</div>
     ${SECC_INF.map(s => {
       const ocultas = P.ocultas[s.k], visibles = s.cols.length - ocultas.length;
       return `<div class="card isec" data-s="${s.k}" style="padding:4px 12px">
@@ -2570,7 +2656,7 @@ async function cargarAjustesEd(){
     const rel = relevosDe(M), nMod = MODULOS.filter(([k]) => M[k] === true).length;
     c.innerHTML = `
       <div class="fab"><button class="btn" id="aNuevoEd">${icono('mas1', 16)} Nuevo edificio</button></div>
-      ${existe ? '' : '<div class="msg">Este edificio aún no publicó su configuración desde la app: revisa todo antes de guardar.</div>'}
+      ${existe ? '' : '<div class="msg">Sin configuración de la app todavía.</div>'}
       ${acc('modulos', 'Módulos de la app', `${nMod} de ${MODULOS.length} activos`, MODULOS.map(([k,t]) => sw(k, t, false)).join(''))}
       ${acc('visita', 'Campos de visita', `Tarjeta de ${dig} dígitos`, CAMPOS_VISITA.map(([k,t]) => sw(k, t, true)).join('')
         + `<label class="field"><span>Dígitos de la tarjeta</span><input id="aDig" type="number" min="3" max="16" value="${dig}" inputmode="numeric"></label>`)}
@@ -3488,9 +3574,9 @@ async function pintarAjustes(){
     ${acc('link', 'Links de administradores', `${unicosPorToken(links).length} link${unicosPorToken(links).length === 1 ? '' : 's'}`, `
     ${info('Cada link muestra <b>solo los movimientos en vivo</b> de los edificios que marques. No ve guardias, informes ni otros edificios. Lo puedes cambiar o desactivar cuando quieras.')}
     <details class="info"><summary>${icono('mas1', 14)} Nuevo link</summary><div>
-      <label class="field"><span>Para quién es (ej. Brandon Rojas · Bramar Group)</span><input id="lNom" autocomplete="off"></label>
-      <label class="field"><span>Dispositivos que pueden abrirlo (ej. 2 = su celular y su compu)</span><select id="lCupos">${[1,2,3,4,5].map(n => `<option ${n === 2 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      <div class="field"><span>Edificios que podrá ver</span><div id="lEds">${eds.map(e => `<label class="chk"><input type="checkbox" value="${esc(e)}" ${e === st.edif ? 'checked' : ''}> ${esc(e)}</label>`).join('')}</div></div>
+      <label class="field"><span>Nombre</span><input id="lNom" autocomplete="off"></label>
+      <label class="field"><span>Dispositivos</span><select id="lCupos">${[1,2,3,4,5].map(n => `<option ${n === 2 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <div class="field"><span>Edificios</span><div id="lEds">${eds.map(e => `<label class="chk"><input type="checkbox" value="${esc(e)}" ${e === st.edif ? 'checked' : ''}> ${esc(e)}</label>`).join('')}</div></div>
       <div id="lMsg"></div>
       <button class="btn prim" id="lCrear">Crear link</button>
     </div></details>
@@ -3506,12 +3592,12 @@ async function pintarAjustes(){
     ${acc('celular', 'Links de guardias (iPhone)', `${unicosPorToken(glinks).length} link${unicosPorToken(glinks).length === 1 ? '' : 's'}`, `
     ${info('Versión web de la app para registrar desde un iPhone: turno, visitas, recurrentes, rondas, incidentes, encomiendas y consultas. Queda amarrada al primer celular que la abre.')}
     <details class="info"><summary>${icono('mas1', 14)} Nuevo link de guardia</summary><div>
-      <label class="field"><span>Nombre (ej. iPhone portería Torre 1)</span><input id="gNom" autocomplete="off"></label>
+      <label class="field"><span>Nombre</span><input id="gNom" autocomplete="off"></label>
       <label class="field"><span>Edificio</span><select id="gEd">${eds.map(e => `<option ${e === st.edif ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></label>
-      <label class="field"><span>Bloque / torre (opcional)</span><input id="gBlo" autocomplete="off" placeholder="Ej. Torre 1"></label>
+      <label class="field"><span>Bloque</span><input id="gBlo" autocomplete="off" placeholder="Ej. Torre 1"></label>
       <div class="row" style="margin-top:0"><label class="field" style="flex:1;margin:0"><span>Relevo 1</span><input id="gR1" type="time" value="08:00"></label><label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="gR2" type="time" value="20:00"></label></div>
       <label class="field"><span>Fotos mínimas por ronda</span><select id="gFot">${[1,2,3,4,5,6,8,10].map(n => `<option ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      <div class="field"><span>Qué podrá usar el guardia (viene marcado según el edificio)</span><div class="card" id="gOpc" style="margin:0"></div></div>
+      <div class="field"><span>Funciones</span><div class="card" id="gOpc" style="margin:0"></div></div>
       <div id="gMsg"></div>
       <button class="btn prim" id="gCrear">Crear link de guardia</button>
     </div></details>
@@ -3525,13 +3611,27 @@ async function pintarAjustes(){
         ${listaDevs(d.token)}
         <div class="acts" style="margin-top:8px"><button class="btn" data-a="copiar">Copiar</button><button class="btn" data-a="compartir">Compartir</button><button class="btn" data-a="geditar">Editar</button><button class="btn" data-a="borrar" style="color:var(--bad)">Desactivar</button></div>
       </div>`; }).join('') : '<div class="empty" style="padding:14px">Sin links.</div>'}</div>`)}
+    ${acc('ajustes', 'Apariencia', ({auto:'Automático', light:'Claro', dark:'Oscuro'})[temaActual()], `
+      <div class="segm temas">${[['auto','Automático'],['light','Claro'],['dark','Oscuro']].map(([k, t]) => `<button data-tema="${k}" class="${temaActual() === k ? 'on' : ''}">${t}</button>`).join('')}</div>`)}
     ${acc('candado', 'Seguridad', 'PIN y sesión', `
-      <div class="acts"><button class="btn" id="cPin">Cambiar PIN</button><button class="btn" id="cSalir">Cerrar sesión aquí</button></div>
+      <div class="acts"><button class="btn" id="cPin">Cambiar PIN</button><button class="btn" id="cSalir">Salir</button></div>
       ${info('Los links bloquean la pantalla en su edificio, pero como la app usa la clave pública de Supabase, alguien con conocimientos técnicos podría leer otros datos. Compártelos solo con personas de confianza.', 'Importante')}`)}`;
   if($('#gEd')){ $('#gEd').onchange = presetOpciones; presetOpciones(); }
 }
+/* Modo claro / oscuro (automático sigue al teléfono) */
+function temaActual(){ const t = leer('tema'); return t === 'light' || t === 'dark' ? t : 'auto'; }
+function aplicarTema(t){
+  if(t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  const oscuro = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const m = document.querySelector('meta[name="theme-color"]'); if(m) m.content = oscuro ? '#0B0D11' : '#F5F6F8';
+}
+aplicarTema(temaActual());
 $('#v-cfg').addEventListener('click', async ev => {
   const t = ev.target;
+  const tb = t.closest('[data-tema]');
+  if(tb){ guardar('tema', tb.dataset.tema); aplicarTema(tb.dataset.tema);
+    tb.parentNode.querySelectorAll('[data-tema]').forEach(b => b.classList.toggle('on', b === tb));
+    const sm = tb.closest('details').querySelector('summary small'); if(sm) sm.textContent = tb.textContent; return; }
   if(t.id === 'lCrear'){
     const nombre = $('#lNom').value.trim(), elegidos = [...document.querySelectorAll('#lEds input:checked')].map(i => i.value);
     if(!nombre){ $('#lMsg').innerHTML = '<div class="msg bad">Escribe para quién es el link.</div>'; return; }
@@ -3628,7 +3728,7 @@ async function editarGlink(d){
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
     <h2>${esc(d.nombre || 'Guardia')}</h2><div class="sub">${esc(d.edificio || '')} · el link no cambia</div>
     <label class="field"><span>Nombre</span><input id="xNom" value="${esc(d.nombre || '')}"></label>
-    <label class="field"><span>Bloque / torre (opcional)</span><input id="xBlo" value="${esc(d.bloque || '')}"></label>
+    <label class="field"><span>Bloque</span><input id="xBlo" value="${esc(d.bloque || '')}"></label>
     <div class="row" style="margin-top:0"><label class="field" style="flex:1;margin:0"><span>Relevo 1</span><input id="xR1" type="time" value="${esc(r1 || '')}"></label><label class="field" style="flex:1;margin:0"><span>Relevo 2</span><input id="xR2" type="time" value="${esc(r2 || '')}"></label></div>
     <label class="field"><span>Fotos mínimas por ronda</span><select id="xFot">${[1,2,3,4,5,6,8,10].map(n => `<option ${n === fot ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
     <div class="card" id="xOpc">${htmlOpciones(o)}</div>
