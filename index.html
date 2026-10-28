@@ -388,6 +388,67 @@ label.btn{cursor:pointer}
   .panel{max-width:680px;margin:auto;border-radius:var(--r-xl);max-height:88vh;padding:var(--s5)}
   .menu{grid-template-columns:repeat(3,1fr)}
 }
+/* barra de título de las hojas */
+.panel{padding-top:0}
+.phead{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:var(--s3);background:var(--card);margin:0 calc(-1 * var(--s4)) var(--s4);padding:var(--s4) var(--s4) var(--s3);border-bottom:1px solid var(--line)}
+.phead .pt{flex:1;min-width:0}
+.phead h2{margin:0;padding:0;font-size:19px}
+.phead .sub{margin:2px 0 0}
+.phead .close{position:static;margin:0;box-shadow:none;flex:0 0 auto}
+@media (min-width:760px){ .phead{margin:0 calc(-1 * var(--s5)) var(--s4);padding:var(--s5) var(--s5) var(--s3)} }
+/* encabezado de sección con acción a la derecha */
+.shead{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin:var(--s5) 0 var(--s3)}
+.shead .h2{margin:0 4px}
+.btn.chico{min-height:36px;padding:6px 14px;font-size:14px;border-radius:999px;background:var(--acc-suave);color:var(--acc)}
+.lnkbtn{border:0;background:none;color:var(--acc);font:inherit;font-size:13.5px;font-weight:600;padding:6px 8px;cursor:pointer}
+/* solicitudes */
+.sol .tl{display:flex;gap:var(--s3);align-items:baseline}
+.sol .tl b{flex:1;font-weight:600}
+.sol .tl span{color:var(--mute);font-size:12.5px;white-space:nowrap}
+.sol .gid{margin-top:2px}
+.sest{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-top:var(--s3)}
+.accb .card{box-shadow:none;background:var(--bg);border-color:var(--line)}
+.card .empty{padding:var(--s5) var(--s3)}
+/* informe */
+.ichk{width:22px;height:22px;flex:0 0 22px;accent-color:var(--acc);margin:0}
+.ichev{width:36px;height:36px;min-height:36px;box-shadow:none;background:var(--chip);border:0}
+.ichev svg{transform:rotate(-90deg);transition:transform .2s}
+.ichev.on svg{transform:rotate(90deg)}
+.isec + .isec{border-top:1px solid var(--line)}
+.icols{margin:0;padding:0 var(--s4) var(--s4) 50px}
+.gtop{align-items:center}
+/* ayuda dentro de un encabezado */
+.sder{display:flex;align-items:center;gap:var(--s2)}
+.shead details.info{margin:0;position:static}
+.shead{position:relative}
+.shead details.info > div{position:absolute;right:0;top:44px;width:min(440px,100%);z-index:6}
+/* ayuda suelta: ícono + texto, alineada a la izquierda */
+details.info.tip{align-items:flex-start;margin:var(--s3) 0}
+details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size:13px}
+.shead details.info.tip > summary{width:32px;padding:0;gap:0}
+.shead .itx{display:none}
+.menu{grid-template-columns:repeat(2,1fr)}
+@media (min-width:760px){ .menu{grid-template-columns:repeat(4,1fr)} }
+/* peticiones */
+#v-sol .segm + .shead{margin-top:0}
+.slista .srow{padding:var(--s4);border-top:1px solid var(--line)}
+.slista .srow:first-child{border-top:0}
+.sfila{display:flex;gap:var(--s4);align-items:flex-start}
+.sfila .t{flex:1;min-width:0}
+.sfila .t b{display:block;font-weight:600}
+.sfila .t small{display:block;color:var(--mute);font-size:13px;margin-top:3px;line-height:1.4}
+.sfila .v{display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right;flex:0 0 auto}
+.sfila .v small{color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
+.sfila .lnkbtn{padding:0;font-size:13px}
+.srow .acts{margin-top:var(--s3)}
+.srow .sconf{margin-top:var(--s3);padding-top:var(--s3);border-top:1px dashed var(--line)}
+.srow .sconf .field{margin-top:0}
+.sMsg:empty{display:none}
+.warnT{color:var(--warn)}
+.aviso{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:var(--r-lg);box-shadow:var(--sombra);padding:var(--s3) var(--s4);min-height:56px;margin-bottom:var(--s3);cursor:pointer}
+.aviso .t{flex:1;font-weight:600;font-size:14px}
+.aviso svg{transform:rotate(180deg);color:var(--mute)}
+@media (max-width:420px){ #solF button{font-size:13px;padding:8px 4px} }
 /* tema */
 .temas{margin:0}
 /* pantallas angostas: dos columnas en cifras de 4 */
@@ -423,6 +484,7 @@ label.btn{cursor:pointer}
     <div id="list"></div>
   </section>
   <section class="vista" id="v-gua" hidden></section>
+  <section class="vista" id="v-sol" hidden></section>
   <section class="vista" id="v-bus" hidden></section>
   <section class="vista" id="v-inf" hidden></section>
   <section class="vista" id="v-edi" hidden></section>
@@ -433,8 +495,8 @@ label.btn{cursor:pointer}
 <nav class="bnav" id="bnav" hidden>
   <button data-v="mov" class="on"><span class="nico" data-ico="envivo"></span>En vivo</button>
   <button data-v="gua"><span class="nico" data-ico="guardias"></span>Guardias</button>
+  <button data-v="sol"><span class="nico" data-ico="peticiones"></span>Peticiones</button>
   <button data-v="cob"><span class="nico" data-ico="cobros"></span>Cobros</button>
-  <button data-v="inf"><span class="nico" data-ico="informe"></span>Informe</button>
   <button data-v="mas"><span class="nico" data-ico="mas"></span>Más</button>
 </nav>
 
@@ -473,6 +535,7 @@ const OPERATIVOS = ['Ingreso de turno','Salida de turno','Doblar turno','Visita'
   'Salida de visita','Entrega de encomienda','Salida de hospedaje'];
 /* Íconos (mismo trazo y tamaño en toda la página) */
 const ICONOS = {
+  peticiones:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>',
   envivo:'<circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/>',
   guardias:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   buscar:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
@@ -503,7 +566,7 @@ const ICONOS = {
   recargar:'<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'
 };
 /* Ayuda plegada: el texto largo queda escondido hasta que lo pidan */
-function info(html, titulo = 'Ayuda'){ return `<details class="info tip"><summary aria-label="${esc(titulo)}" title="${esc(titulo)}">${icono('info', 16)}</summary><div>${html}</div></details>`; }
+function info(html, titulo = 'Más información'){ return `<details class="info tip"><summary aria-label="${esc(titulo)}" title="${esc(titulo)}">${icono('info', 16)}<span class="itx">${esc(titulo)}</span></summary><div>${html}</div></details>`; }
 /* Sección desplegable con ícono, título y una línea de resumen */
 function acc(ico, titulo, resumen, cuerpo, abierto = false){
   return `<details class="acc"${abierto ? ' open' : ''}><summary><span class="sic">${icono(ico, 18)}</span><span class="st">${esc(titulo)}${resumen ? `<small>${resumen}</small>` : ''}</span></summary><div class="accb">${cuerpo}</div></details>`;
@@ -934,7 +997,17 @@ let vistaActual = 'mov';
   mo.observe($('#sheet'), {attributes:true, attributeFilter:['class']});
   mo.observe($('#lb'), {attributes:true, attributeFilter:['class']});
   /* al abrir otra hoja, empieza desde arriba */
-  new MutationObserver(() => { const p = $('#panel'); if(p) p.scrollTop = 0; }).observe($('#panel'), {childList:true});
+  /* cada hoja: título y "Cerrar" en una barra fija arriba (el botón nunca tapa el contenido) */
+  const armarCabecera = p => {
+    const x = p.firstElementChild;
+    if(!x || !x.classList.contains('close') || p.querySelector(':scope > .phead')) return;
+    const h = document.createElement('div'); h.className = 'phead';
+    const t = document.createElement('div'); t.className = 'pt';
+    let n = x.nextElementSibling;
+    if(n && n.tagName === 'H2'){ const sig = n.nextElementSibling; t.appendChild(n); if(sig && sig.classList.contains('sub')) t.appendChild(sig); }
+    h.appendChild(t); h.appendChild(x); p.prepend(h);
+  };
+  new MutationObserver(() => { const p = $('#panel'); if(!p) return; armarCabecera(p); p.scrollTop = 0; }).observe($('#panel'), {childList:true});
 })();
 
 /* ===== Cálculo de horas: copia FIEL de turnos.dart + panel_horas.dart (app v12.x) =====
@@ -1439,13 +1512,12 @@ function resumenMesHtml(D, g){
   const lista = m.sinTurno.map(x => `<div class="turno"><div class="tl"><b>${esc(x.t0.toLocaleDateString('es',{weekday:'short',day:'2-digit',month:'2-digit'}))} ${esc(hm(x.t0))}</b>
       <span class="badge" style="background:${x.permiso ? 'var(--info)' : 'var(--bad)'}">${x.permiso ? 'PERMISO' : 'FALTA'}</span></div>
       <div class="mv">${x.cubrio ? 'Cubrió: ' + esc(x.cubrio) : 'Nadie registró ese turno'}</div></div>`).join('');
-  return `<div class="h2">Resumen del mes</div>
+  return `<div class="shead"><div class="h2">Resumen del mes</div><div class="sder">${info('Del ingreso diurno del día 1 al último turno nocturno del mes. ' + (fijo ? 'Un turno sin ingreso es <b>permiso</b> si tenía el día libre aprobado; si no, es <b>falta</b>.' : 'Los franqueros no tienen turnos fijos: no se cuentan faltas.'), 'Cómo se cuenta')}</div></div>
     <div class="stats" style="grid-template-columns:repeat(${fijo ? 3 : 2},1fr)">
       ${fijo ? s(`<b>${m.permisos}</b>`, 'Permisos') + s(`<b class="${m.faltas ? 'neg' : ''}">${m.faltas}</b>`, 'Faltas') : ''}
       ${s(`<b>${m.libresPedidos}</b>`, 'Días libres pedidos')}${s(`<b>${m.adelPedidos}</b>`, 'Adelantos pedidos')}
       ${s(`<b>${m.adelConfirmados}</b>`, 'Adelantos confirmados')}${s(`<b>${esc(bsTxt(m.adelTotal))}</b>`, 'Total adelantos')}
     </div>
-    ${info('Del ingreso diurno del día 1 al último turno nocturno del mes. ' + (fijo ? 'Un turno sin ingreso es <b>permiso</b> si tenía el día libre aprobado; si no, es <b>falta</b>.' : 'Los franqueros no tienen turnos fijos: no se cuentan faltas.'), 'Cómo se cuenta')}
     ${fijo && m.sinTurno.length ? `<div class="card">${lista}</div>` : ''}`;
 }
 function fmtSaldo(h){ const t = Turnos.saldo(h); const c = Math.round(h*60) > 0 ? 'pos' : (Math.round(h*60) < 0 ? 'neg' : ''); return `<b class="${c}">${esc(t)}</b>`; }
@@ -1457,7 +1529,7 @@ function pintarGuardias(){
   const card = g => {
     const r = D.horas.get(g.ci);
     return `<div class="card gcard" data-ci="${esc(g.ci)}">
-      <div class="gtop"><div class="gname">${esc(g.nombre)}</div>${g.activo ? '' : '<span class="badge" style="background:#94a3b8">DE BAJA</span>'}</div>
+      <div class="gtop"><div class="gname">${esc(g.nombre)}</div>${g.activo ? '' : '<span class="pill">De baja</span>'}</div>
       <div class="gid">ID ${esc(g.ci)} · ${TURNO_TXT[g.turno] || esc(g.turno)}${g.bloque ? ' · ' + esc(g.bloque) : ''}</div>
       <div class="stats">
         <div class="stat">${g.turno === 'FRANQUERO' ? '<b style="font-size:13px">No aplica</b>' : fmtSaldo(r ? r.saldo : 0)}<small>Horas extras</small></div>
@@ -1468,17 +1540,17 @@ function pintarGuardias(){
         return `<div class="gres">${fijo ? `Permisos <b>${m.permisos}</b> · Faltas <b class="${m.faltas ? 'neg' : ''}">${m.faltas}</b> · ` : ''}Adelantos <b>${m.adelConfirmados ? esc(bsTxt(m.adelTotal)) : '0'}</b></div>`; })()}</div>`;
   };
   box.innerHTML = `
-    <div id="gSol"></div>
-    <button class="btn prim" id="gNuevo" style="margin-top:14px">＋ Registrar guardia</button>
-    <div class="h2">${esc(D.ed)} · ${esc(mesTxt(D.mes))} · ${activos.length} activo${activos.length === 1 ? '' : 's'}</div>
-    ${activos.length ? activos.map(card).join('') : '<div class="empty">No hay guardias registrados en este edificio.</div>'}
+    ${(() => { const n = SOL.lista.filter(porAtender).length; return n ? `<button class="aviso" id="gIrSol"><span class="pill warn">${n}</span><span class="t">${n === 1 ? 'Una petición por responder' : n + ' peticiones por responder'}</span>${icono('atras', 16)}</button>` : ''; })()}
+    <div class="shead"><div class="h2">Guardias · ${activos.length} activo${activos.length === 1 ? '' : 's'}</div>
+      <div class="sder">${info((D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.') + ' Un turno de 36 h cuenta como día extra, no como horas extras.' + ` Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.`, 'Cómo se calculan las horas')}<button class="btn chico" id="gNuevo">${icono('mas1', 15)} Registrar</button></div></div>
+    ${activos.length ? activos.map(card).join('') : '<div class="card"><div class="empty">Sin guardias registrados.</div></div>'}
     ${bajas.length ? `<button class="btn more" id="gBajas">${GU.verBajas ? 'Ocultar' : 'Ver'} dados de baja (${bajas.length})</button>
       ${GU.verBajas ? bajas.map(card).join('') : ''}` : ''}
-    ${info((D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.') + ' Un turno de 36 h cuenta como día extra, no como horas extras.' + ` Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.`, 'Cómo se calculan las horas')}`;
-  pintarSolicitudes();
+`;
 }
 
 $('#v-gua').addEventListener('click', ev => {
+  if(ev.target.closest('#gIrSol')) return irA('sol');
   if(ev.target.id === 'gNuevo') return formGuardia();
   if(ev.target.id === 'gBajas'){ GU.verBajas = !GU.verBajas; return pintarGuardias(); }
   const c = ev.target.closest('.gcard'); if(c) detalleGuardia(c.dataset.ci);
@@ -1668,7 +1740,7 @@ const porAtender = x => x.estado === 'pendiente' || x.estado === 'por_confirmar'
 
 /* Número en el botón "Guardias" de la barra de abajo */
 function pintarAvisoSol(){
-  const b = document.querySelector('#bnav button[data-v="gua"]'); if(!b) return;
+  const b = document.querySelector('#bnav button[data-v="sol"]'); if(!b) return;
   const n = SOL.lista.filter(porAtender).length;
   let s = b.querySelector('.solN');
   if(!n){ if(s) s.remove(); return; }
@@ -1684,89 +1756,80 @@ async function cargarSolicitudes(){
     SOL.lista = l; SOL.cargado = true;
   }catch(e){
     if(mio !== SOL.gen) return;
-    const box = $('#gSol'); if(box) box.innerHTML = `<div class="err">No se pudieron leer las solicitudes (${esc(e.message)}).</div>`;
+    const box = $('#v-sol'); if(box && vistaActual === 'sol') box.innerHTML = `<div class="err">No se pudieron leer las solicitudes (${esc(e.message)}).</div>`;
     return;
   }
   pintarAvisoSol();
   /* con los pedidos ya leídos, las tarjetas de guardias muestran permisos y adelantos */
-  if(typeof vistaActual !== 'undefined' && vistaActual === 'gua' && GU.datos && $('#gSol')) pintarGuardias();
-  else pintarSolicitudes();
+  if(typeof vistaActual !== 'undefined' && vistaActual === 'gua' && GU.datos) pintarGuardias();
+  if(typeof vistaActual !== 'undefined' && vistaActual === 'sol') pintarSolicitudes();
 }
 
+const SOL_EST = {pendiente:['Pendiente','warn'], aprobado:['Aprobado','ok'], por_confirmar:['Por confirmar','warn'],
+  confirmado:['Entregado','ok'], rechazado:['No aprobado',''], no_entregado:['No entregado','']};
 function itemSol(x, conEdificio){
-  const tit = x.clase === 'adelanto' ? 'Adelanto' + (x.fecha ? ' · para el ' + diaLibreTxt(x.fecha) : '') : 'Día libre · ' + diaLibreTxt(x.fecha);
-  const pedido = x.t.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}) + ' ' + hm(x.t);
-  const quien = esc(x.guardia) + (conEdificio ? ' · ' + esc(x.ed) : '') + (x.bloque ? ' · ' + esc(x.bloque) : '');
-  let estado = '', acciones = '';
-  switch(x.estado){
-    case 'pendiente':
-      estado = 'Esperando tu respuesta';
-      acciones = `<div class="acts"><button class="btn prim" data-sact="aprobado" data-sid="${esc(x.sid)}">Aprobar</button>
-        <button class="btn" data-sact="rechazado" data-sid="${esc(x.sid)}">No aprobar</button></div>`;
-      break;
-    case 'aprobado':
-      estado = x.clase === 'adelanto' ? 'Aprobado · falta que el guardia escriba el monto que recibió' : 'Aprobado';
-      acciones = `<div class="acts"><button class="btn" data-sact="rechazado" data-sid="${esc(x.sid)}">Cambiar a no aprobado</button></div>`;
-      break;
-    case 'por_confirmar':
-      estado = `El guardia dice que recibió <b>${esc(bsTxt(x.montoGuardia))}</b>`;
-      acciones = `<label class="field" style="margin:8px 0 6px"><span>Monto que le diste</span>
-          <input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(x.montoGuardia)}" data-smonto="${esc(x.sid)}"></label>
-        <div class="acts"><button class="btn prim" data-sact="confirmado" data-sid="${esc(x.sid)}">Confirmar</button>
-        <button class="btn" data-sact="no_entregado" data-sid="${esc(x.sid)}">No se lo di</button></div>`;
-      break;
-    case 'confirmado': estado = `Confirmado · <b>${esc(bsTxt(x.monto))}</b>`; break;
-    case 'rechazado':
-      estado = 'No aprobado';
-      acciones = `<div class="acts"><button class="btn" data-sact="aprobado" data-sid="${esc(x.sid)}">Cambiar a aprobado</button></div>`;
-      break;
-    case 'no_entregado': estado = 'No confirmado (no cuenta como adelanto)'; break;
-  }
-  return `<div class="card sol">
-    <div class="tl"><b>${esc(tit)}</b><span>${esc(pedido)}</span></div>
-    <div class="gid">${quien}</div>
-    ${x.motivo ? `<div style="margin-top:4px">${esc(x.motivo)}</div>` : ''}
-    <div style="margin-top:6px;color:var(--mute)">${estado}</div>
-    ${acciones}<div class="sMsg" data-smsg="${esc(x.sid)}"></div></div>`;
+  const tipo = x.clase === 'adelanto' ? 'Adelanto' : 'Día libre';
+  const cuando = x.clase === 'libre' ? diaLibreTxt(x.fecha) : (x.fecha ? diaLibreTxt(x.fecha) : '');
+  const pedido = x.t.toLocaleDateString('es',{day:'2-digit',month:'short'}) + ', ' + hm(x.t);
+  const linea = [tipo + (cuando ? ' para el ' + cuando : ''), x.motivo].filter(Boolean).join('. ');
+  const donde = [conEdificio ? x.ed : '', x.bloque].filter(Boolean).join(', ');
+  const b = (est, txt, cls = 'btn') => `<button class="${cls}" data-sact="${est}" data-sid="${esc(x.sid)}">${txt}</button>`;
+  let [et, cl] = SOL_EST[x.estado] || ['', ''];
+  if(x.estado === 'aprobado' && x.clase === 'adelanto') et = 'Aprobado, falta el monto';
+  if(x.estado === 'confirmado') et = 'Entregado ' + bsTxt(x.monto);
+  let pie = '';
+  if(x.estado === 'pendiente') pie = `<div class="acts">${b('rechazado', 'No aprobar')}${b('aprobado', 'Aprobar', 'btn prim')}</div>`;
+  else if(x.estado === 'por_confirmar') pie = `<div class="sconf"><label class="field"><span>El guardia dice que recibió ${esc(bsTxt(x.montoGuardia))}. Monto entregado</span>
+      <input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(x.montoGuardia)}" data-smonto="${esc(x.sid)}"></label>
+      <div class="acts">${b('no_entregado', 'No se lo di')}${b('confirmado', 'Confirmar', 'btn prim')}</div></div>`;
+  const cambiar = x.estado === 'aprobado' ? b('rechazado', 'Cambiar', 'lnkbtn') : x.estado === 'rechazado' ? b('aprobado', 'Cambiar', 'lnkbtn') : '';
+  return `<div class="srow">
+    <div class="sfila">
+      <div class="t"><b>${esc(x.guardia)}</b><small>${esc(linea)}</small>${donde ? `<small>${esc(donde)}</small>` : ''}</div>
+      <div class="v"><span class="pill ${cl}">${esc(et)}</span><small>${esc(pedido)}</small>${cambiar}</div>
+    </div>${pie}<div class="sMsg" data-smsg="${esc(x.sid)}"></div></div>`;
 }
-
+const SOLV = {filtro:'pend'};
 function pintarSolicitudes(){
-  const box = $('#gSol'); if(!box) return;
+  const box = $('#v-sol'); if(!box || vistaActual !== 'sol') return;
   if(!SOL.cargado){ box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; return; }
   const ed = st.edif, mes = mesActual();
   const atender = SOL.lista.filter(porAtender);
-  /* del mes elegido, este edificio */
   const enMes = x => { const t = x.clase === 'libre' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? new Date(x.fecha + 'T12:00:00') : x.t;
     return t.getFullYear() === mes.y && t.getMonth() === mes.m; };
-  const delEd = SOL.lista.filter(x => x.ed === ed && !porAtender(x) && enMes(x));
-  const adel = delEd.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado');
-  const tot = new Map(); for(const x of adel){ const k = x.ci || x.guardia; const p = tot.get(k) || {n:x.guardia, s:0, c:0}; p.s += x.monto || 0; p.c++; tot.set(k, p); }
-  const libres = delEd.filter(x => x.clase === 'libre' && x.estado === 'aprobado');
-  const otros = delEd.filter(x => !adel.includes(x) && !libres.includes(x));
+  const delMes = SOL.lista.filter(x => x.ed === ed && enMes(x));
+  const adel = delMes.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado');
+  const total = adel.reduce((a, x) => a + (x.monto || 0), 0);
+  const libres = delMes.filter(x => x.clase === 'libre' && x.estado === 'aprobado');
+  const f = SOLV.filtro;
+  const filtros = [['pend', 'Pendientes'], ['adel', 'Adelantos'], ['libre', 'Días libres']];
+  let lista, vacio;
+  if(f === 'pend'){ lista = atender; vacio = 'No hay peticiones por responder.'; }
+  else if(f === 'adel'){ lista = delMes.filter(x => x.clase === 'adelanto' && !porAtender(x)); vacio = 'Sin adelantos en el mes.'; }
+  else { lista = delMes.filter(x => x.clase === 'libre' && !porAtender(x)); vacio = 'Sin días libres en el mes.'; }
+  const nomMes = new Date(mes.y, mes.m, 1).toLocaleDateString('es',{month:'long'});
   box.innerHTML = `
-    <div class="h2">Pendientes${atender.length ? ' (' + atender.length + ')' : ''}</div>
-    ${atender.length ? atender.map(x => itemSol(x, true)).join('') : '<div class="empty" style="padding:12px">Sin pendientes.</div>'}
-    <div class="h2">Adelantos del mes</div>
-    ${tot.size ? `<div class="card sol">${[...tot.values()].sort((a,b) => a.n.localeCompare(b.n,'es')).map(p =>
-        `<div class="tl" style="padding:4px 0"><b>${esc(p.n)}</b><span>${p.c} adelanto${p.c === 1 ? '' : 's'} · <b>${esc(bsTxt(p.s))}</b></span></div>`).join('')}</div>`
-      : '<div class="empty" style="padding:12px">Sin adelantos confirmados en el mes.</div>'}
-    ${libres.length ? `<div class="h2">Días libres del mes</div>${libres.map(x => itemSol(x, false)).join('')}` : ''}
-    ${(adel.length || otros.length) ? `<button class="btn more" id="sHist">${SOL.verHist ? 'Ocultar' : 'Ver'} detalle del mes (${adel.length + otros.length})</button>
-      ${SOL.verHist ? [...adel, ...otros].map(x => itemSol(x, false)).join('') : ''}` : ''}`;
+    <div class="kpis">
+      <div class="kpi"><b class="${atender.length ? 'warnT' : ''}">${atender.length}</b><small>Por responder</small></div>
+      <div class="kpi"><b>${esc(bsTxt(total))}</b><small>Adelantos</small></div>
+      <div class="kpi"><b>${libres.length}</b><small>Días libres</small></div>
+    </div>
+    <div class="segm" id="solF">${filtros.map(([k, t]) => `<button class="${f === k ? 'on' : ''}" data-f="${k}">${esc(t)}</button>`).join('')}</div>
+    <div class="shead"><div class="h2">${f === 'pend' ? 'Todos los edificios' : esc(st.edif + ', ' + nomMes)}</div><div class="sder">${info(f === 'pend' ? 'Aquí llegan los pedidos de todos los edificios. Un adelanto aprobado cuenta recién cuando confirmas el monto que entregaste.' : 'Se muestran los pedidos del edificio y mes elegidos arriba.', 'Cómo funciona')}</div></div>
+    <div class="lista slista">${lista.length ? lista.map(x => itemSol(x, f === 'pend')).join('') : `<div class="empty">${vacio}</div>`}</div>
+`;
 }
-
-/* Historial de un guardia (en su ficha): todo lo pedido en los últimos meses */
 async function historialSolGuardia(ed, g, mes){
   const box = () => $('#gSolG');
   SOL.ficha = {ed, g, mes};
   try{ if(!SOL.cargado) await cargarSolicitudes(); }catch(_){}
   if(!box()) return;
   const suyas = SOL.lista.filter(x => x.ed === ed && (x.ci ? x.ci === g.ci : x.guardia === g.nombre));
-  if(!suyas.length){ box().innerHTML = '<div class="empty" style="padding:16px">No pidió adelantos ni días libres.</div>'; return; }
+  if(!suyas.length){ box().innerHTML = '<div class="lista"><div class="empty">No pidió adelantos ni días libres.</div></div>'; return; }
   const delMes = suyas.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado' && x.t.getFullYear() === mes.y && x.t.getMonth() === mes.m);
   const total = delMes.reduce((a, x) => a + (x.monto || 0), 0);
-  box().innerHTML = `<div class="msg">Adelantos confirmados en ${esc(mesTxt(mes))}: <b>${delMes.length ? esc(bsTxt(total)) : 'ninguno'}</b>${delMes.length > 1 ? ' (' + delMes.length + ')' : ''}</div>`
-    + suyas.map(x => itemSol(x, false)).join('');
+  box().innerHTML = `<div class="lista slista"><div class="srow"><div class="sfila"><div class="t"><b>Adelantos de ${esc(mesTxt(mes))}</b><small>${delMes.length} entregado${delMes.length === 1 ? '' : 's'}</small></div><div class="v"><b>${esc(bsTxt(total))}</b></div></div></div>`
+    + suyas.map(x => itemSol(x, false)).join('') + '</div>';
 }
 
 async function responderSol(sid, estado){
@@ -1795,10 +1858,11 @@ $('#panel').addEventListener('click', ev => {
   const b = ev.target.closest('[data-sact]');
   if(b) responderSol(b.dataset.sid, b.dataset.sact);
 });
-$('#v-gua').addEventListener('click', ev => {
+$('#v-sol').addEventListener('click', ev => {
   const b = ev.target.closest('[data-sact]');
-  if(b){ ev.stopPropagation(); return responderSol(b.dataset.sid, b.dataset.sact); }
-  if(ev.target.id === 'sHist'){ SOL.verHist = !SOL.verHist; pintarSolicitudes(); }
+  if(b) return responderSol(b.dataset.sid, b.dataset.sact);
+  const f = ev.target.closest('#solF [data-f]');
+  if(f){ SOLV.filtro = f.dataset.f; pintarSolicitudes(); }
 });
 
 /* ===================== COBROS: notas de cobranza y recibos (solo supervisión) =====================
@@ -2431,23 +2495,22 @@ function guardarPref(){ const p = INF.pref; if(p) guardar('inf_' + p.ed, JSON.st
 function pintarInforme(){
   const mes = mesActual(), P = prefInforme();
   $('#v-inf').innerHTML = `
-    <div class="h2">Informe mensual · ${esc(st.edif || '')} · ${esc(mesTxt(mes))}</div>
+    <div class="h2">Hoja</div>
     <div class="card">
-      <div class="field" style="margin-top:0"><span>Tamaño de hoja (horizontal)</span><div class="seg" id="iPapel">
-        ${Object.entries(PAPELES).map(([k,v]) => `<button class="btn${P.papel === k ? ' on' : ''}" data-p="${k}">${v.t}</button>`).join('')}</div></div>
-      <label class="chk"><input type="checkbox" id="iVacias" ${P.vacias ? 'checked' : ''}> Quitar solas las columnas que ese mes están vacías</label>
+      <div class="segm" id="iPapel" style="margin:0">${Object.entries(PAPELES).map(([k,v]) => `<button class="${P.papel === k ? 'on' : ''}" data-p="${k}">${v.t}</button>`).join('')}</div>
+      <label class="chk" style="border:0;padding-bottom:0"><input type="checkbox" id="iVacias" ${P.vacias ? 'checked' : ''}> Ocultar columnas vacías</label>
     </div>
-    <div class="h2">Secciones y columnas</div>
-    ${SECC_INF.map(s => {
-      const ocultas = P.ocultas[s.k], visibles = s.cols.length - ocultas.length;
-      return `<div class="card isec" data-s="${s.k}" style="padding:4px 12px">
-        <div class="chk" style="border:0"><input type="checkbox" data-sec="${s.k}" ${P.secc[s.k] ? 'checked' : ''}>
-          <span style="flex:1" data-abrir="${s.k}">${esc(s.t)}<br><small style="font-weight:500;color:var(--mute)">${visibles} de ${s.cols.length} columnas</small></span>
-          <button class="btn" data-abrir="${s.k}" aria-label="Columnas">${INF.abierta === s.k ? '▲' : '▼'}</button></div>
-        ${INF.abierta === s.k ? `<div class="chips" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px">${s.cols.map(([c, t]) =>
+    <div class="h2">Secciones</div>
+    <div class="lista">${SECC_INF.map(s => {
+      const ocultas = P.ocultas[s.k], visibles = s.cols.length - ocultas.length, abierta = INF.abierta === s.k;
+      return `<div class="isec" data-s="${s.k}">
+        <div class="it" style="cursor:default"><input type="checkbox" class="ichk" data-sec="${s.k}" ${P.secc[s.k] ? 'checked' : ''} aria-label="Incluir ${esc(s.t)}">
+          <div class="t" data-abrir="${s.k}" style="cursor:pointer"><b>${esc(s.t)}</b><small>${visibles} de ${s.cols.length} columnas</small></div>
+          <button class="ibtn ichev${abierta ? ' on' : ''}" data-abrir="${s.k}" aria-label="Columnas">${icono('atras', 16)}</button></div>
+        ${abierta ? `<div class="chips icols">${s.cols.map(([c, t]) =>
           `<button class="tab${ocultas.includes(c) ? '' : ' on'}" data-col="${c}" data-s2="${s.k}">${esc(t)}</button>`).join('')}</div>` : ''}
-      </div>`; }).join('')}
-    <button class="btn prim" id="iGen" style="margin-top:6px">Generar PDF</button>
+      </div>`; }).join('')}</div>
+    <button class="btn prim" id="iGen">Generar PDF</button>
     <div id="iRes"></div>`;
 }
 $('#v-inf').addEventListener('change', e => {
@@ -3919,27 +3982,28 @@ window.addEventListener('popstate', () => {
 function irA(v, desdeAtras){
   if(!desdeAtras && v !== vistaActual) navPush({vista: vistaActual});
   vistaActual = v;
-  for(const x of ['mov','gua','bus','inf','edi','cfg','cob']) $('#v-' + x).hidden = x !== v;
-  const enMas = ['bus','edi','cfg'].includes(v);
+  for(const x of ['mov','gua','sol','bus','inf','edi','cfg','cob']) $('#v-' + x).hidden = x !== v;
+  const enMas = ['inf','bus','edi','cfg'].includes(v);
   [...$('#bnav').children].forEach(b => b.classList.toggle('on', b.dataset.v === v || (enMas && b.dataset.v === 'mas')));
   /* Cobros y Ajustes son de todos los edificios: sin selector arriba */
   $('header .row').hidden = v === 'cob' || v === 'cfg';
   $('#tabs').style.display = v === 'mov' ? '' : 'none';
   $('#online').style.display = v === 'mov' ? '' : 'none';
   $('#periodo').hidden = v !== 'mov';
-  $('#mesSel').hidden = !(v === 'gua' || v === 'inf' || v === 'bus');
+  $('#mesSel').hidden = !(v === 'gua' || v === 'sol' || v === 'inf' || v === 'bus');
   scrollTo({top:0});
   if(v === 'mov') refrescar();
   if(v === 'gua') cargarGuardias();
+  if(v === 'sol'){ pintarSolicitudes(); cargarSolicitudes(); }
   if(v === 'inf') pintarInforme();
   if(v === 'edi') pintarEdificio();
   if(v === 'bus') pintarBuscar();
   if(v === 'cfg') pintarAjustes();
   if(v === 'cob') Cobros.pintar($('#v-cob'));
 }
-/* Menú "Más": Buscar, Edificio y Ajustes */
+/* Menú "Más": Informe, Buscar, Edificio y Ajustes */
 function abrirMas(){
-  const op = [['bus','buscar','Buscar'], ['edi','edificio','Edificio'], ['cfg','ajustes','Ajustes']];
+  const op = [['inf','informe','Informe'], ['bus','buscar','Buscar'], ['edi','edificio','Edificio'], ['cfg','ajustes','Ajustes']];
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Más</h2>
     <div class="menu">${op.map(([v, ic, t]) => `<button data-ir="${v}" class="${vistaActual === v ? 'on' : ''}"><span class="sic">${icono(ic, 20)}</span>${t}</button>`).join('')}</div>`;
   $('#sheet').classList.add('on');
@@ -3956,6 +4020,7 @@ $('#panel').addEventListener('click', e => {
 function refrescarVista(){
   if(vistaActual === 'mov') return refrescar(true);
   if(vistaActual === 'gua') return Promise.all([cargarGuardias(), cargarSolicitudes()]);
+  if(vistaActual === 'sol') return cargarSolicitudes();
   if(vistaActual === 'inf') return pintarInforme();
   if(vistaActual === 'bus') return BUS.res.length ? buscar() : pintarBuscar();
   if(vistaActual === 'cob') return Cobros.pintar($('#v-cob'), true);
@@ -3966,9 +4031,9 @@ function refrescarVista(){
   }
   return pintarAjustes();
 }
-function alCambiarEdificio(){ GU.datos = null; BUS.res = []; BUS.sel = new Set(); if(vistaActual === 'bus') pintarBuscar(); ED.datos = {}; ED.sucio = {}; ED.cfg = null; if(vistaActual === 'edi') pintarEdificio(); if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'inf') pintarInforme(); }
+function alCambiarEdificio(){ GU.datos = null; BUS.res = []; BUS.sel = new Set(); if(vistaActual === 'bus') pintarBuscar(); ED.datos = {}; ED.sucio = {}; ED.cfg = null; if(vistaActual === 'edi') pintarEdificio(); if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'sol') pintarSolicitudes(); if(vistaActual === 'inf') pintarInforme(); }
 $('#bnav').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; if(b.dataset.v === 'mas') abrirMas(); else irA(b.dataset.v); });
-$('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.res = []; pintarBuscar(); } if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'inf') pintarInforme(); });
+$('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.res = []; pintarBuscar(); } if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'sol') pintarSolicitudes(); if(vistaActual === 'sol') pintarSolicitudes(); if(vistaActual === 'inf') pintarInforme(); });
 
 /* ---------- Arranque ---------- */
 (async function(){
@@ -4012,7 +4077,7 @@ $('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.r
   ocultarSplash();
   /* abrir directo en una sección (ej. ?v=cob para Cobros) */
   const vIni = new URLSearchParams(location.search).get('v');
-  if(ACC.modo !== 'admin' && ['gua','cob','inf','bus','edi','cfg'].includes(vIni)) irA(vIni, true);
+  if(ACC.modo !== 'admin' && ['gua','sol','cob','inf','bus','edi','cfg'].includes(vIni)) irA(vIni, true);
   /* pedidos de adelanto / día libre: número en "Guardias" (solo supervisión) */
   if(ACC.modo !== 'admin'){ cargarSolicitudes(); setInterval(() => { if(!document.hidden) cargarSolicitudes(); }, 120000); }
   st.timer = setInterval(() => {
