@@ -141,6 +141,9 @@ body.admin{padding-bottom:0}
 .gcard{cursor:pointer}
 .gtop{display:flex;align-items:flex-start;gap:8px}
 .gname{font-weight:800;font-size:16px;flex:1;min-width:0;overflow-wrap:anywhere}
+.gres{margin-top:8px;font-size:13px;color:var(--mute)}
+.gres b{color:var(--ink)}
+.gres b.neg{color:var(--bad)}
 .gid{color:var(--mute);font-size:13px;margin-top:1px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
 .stat{background:var(--chip);border-radius:10px;padding:7px 4px;text-align:center}
@@ -1149,6 +1152,76 @@ async function cargarGuardias(){
   }
 }
 
+/* ---------- Resumen del mes por guardia ----------
+   El mes va del ingreso del DIURNO el día 1 al último turno NOCTURNO de ese mes
+   (el mismo corte de las horas extras). Para diurnos y nocturnos se revisa cada
+   turno que les tocaba: si no entraron, es PERMISO (día libre aprobado para esa
+   fecha) o FALTA, con quién lo cubrió. Los franqueros no tienen turnos fijos. */
+function relevosDelEdificio(D){
+  const cuenta = new Map();
+  for(const r of D.horas.values()) for(const t of r.turnos){
+    const k = Turnos.limpiar(t.horariosUsados || []).sort().join(','); if(k) cuenta.set(k, (cuenta.get(k) || 0) + 1);
+  }
+  const mejor = [...cuenta.entries()].sort((a,b) => b[1] - a[1])[0];
+  const l = (mejor ? mejor[0].split(',') : Turnos.porDefecto.slice()).sort();
+  return l.length >= 2 ? l : Turnos.limpiar(l).sort();
+}
+const ymdLocal = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+function turnosQueCubren(D, t0){
+  const out = [];
+  for(const r of D.horas.values()) for(const t of r.turnos){
+    if(t.estado === 'anulado' || t.estado === 'muy corto') continue;
+    const ini = t.progInicio || t.inicio, n = Math.max(1, Math.round((t.nivel || 12) / 12));
+    for(let k = 0; k < n; k++){ if(Math.abs(+ini + k * 432e5 - t0) <= 3 * 36e5){ out.push(t); break; } }
+  }
+  return out;
+}
+function resumenMes(D, g){
+  const r = D.horas.get(g.ci);
+  const res = {dias: r ? r.dias : 0, n36: r ? r.n36 : 0, n24: r ? r.n24 : 0, sinTurno: [], permisos: 0, faltas: 0,
+    adelPedidos: 0, adelConfirmados: 0, adelTotal: 0, libresPedidos: 0};
+  const enMes = d => d.getFullYear() === D.mes.y && d.getMonth() === D.mes.m;
+  const suyas = (SOL.lista || []).filter(x => x.ed === D.ed && (x.ci ? x.ci === g.ci : x.guardia === g.nombre));
+  for(const x of suyas){
+    if(x.clase === 'adelanto' && enMes(x.t)){ res.adelPedidos++; if(x.estado === 'confirmado'){ res.adelConfirmados++; res.adelTotal += x.monto || 0; } }
+    if(x.clase === 'libre' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && enMes(new Date(x.fecha + 'T12:00:00'))) res.libresPedidos++;
+  }
+  if(g.turno !== 'DIURNO' && g.turno !== 'NOCTURNO') return res;
+  const rel = relevosDelEdificio(D), h = rel[g.turno === 'NOCTURNO' ? 1 : 0] || rel[0];
+  const [hh, mm] = h.split(':').map(Number);
+  const aprobados = new Set(suyas.filter(x => x.clase === 'libre' && x.estado === 'aprobado').map(x => x.fecha));
+  const ultimo = new Date(D.mes.y, D.mes.m + 1, 0).getDate();
+  const ahora = Date.now();
+  const desde = g.desde ? new Date(g.desde.getFullYear(), g.desde.getMonth(), g.desde.getDate() + 1) : null; // el día que lo registraron no cuenta
+  for(let dia = 1; dia <= ultimo; dia++){
+    const t0 = new Date(D.mes.y, D.mes.m, dia, hh, mm);
+    if(+t0 + 30 * 6e4 > ahora) break;                 // todavía no le tocaba
+    if(desde && t0 < desde) continue;                  // antes de que lo registraran
+    if(!g.activo && g.desde && t0 >= g.desde) break;   // después de su baja
+    const cubren = turnosQueCubren(D, +t0);
+    if(cubren.some(t => t.clave === g.ci)) continue;   // entró (o dobló y cubrió ese turno)
+    const fecha = ymdLocal(t0), permiso = aprobados.has(fecha);
+    const otros = [...new Set(cubren.map(t => t.guardia))];
+    res.sinTurno.push({t0, fecha, permiso, cubrio: otros.join(', ')});
+    if(permiso) res.permisos++; else res.faltas++;
+  }
+  return res;
+}
+function resumenMesHtml(D, g){
+  const m = resumenMes(D, g), fijo = g.turno === 'DIURNO' || g.turno === 'NOCTURNO';
+  const s = (v, l) => `<div class="stat">${v}<small>${l}</small></div>`;
+  const lista = m.sinTurno.map(x => `<div class="turno"><div class="tl"><b>${esc(x.t0.toLocaleDateString('es',{weekday:'short',day:'2-digit',month:'2-digit'}))} ${esc(hm(x.t0))}</b>
+      <span class="badge" style="background:${x.permiso ? 'var(--info)' : 'var(--bad)'}">${x.permiso ? 'PERMISO' : 'FALTA'}</span></div>
+      <div class="mv">${x.cubrio ? 'Cubrió: ' + esc(x.cubrio) : 'Nadie registró ese turno'}</div></div>`).join('');
+  return `<div class="h2">Resumen del mes</div>
+    <div class="stats" style="grid-template-columns:repeat(${fijo ? 3 : 2},1fr)">
+      ${fijo ? s(`<b>${m.permisos}</b>`, 'Permisos') + s(`<b class="${m.faltas ? 'neg' : ''}">${m.faltas}</b>`, 'Faltas') : ''}
+      ${s(`<b>${m.libresPedidos}</b>`, 'Días libres pedidos')}${s(`<b>${m.adelPedidos}</b>`, 'Adelantos pedidos')}
+      ${s(`<b>${m.adelConfirmados}</b>`, 'Adelantos confirmados')}${s(`<b>${esc(bsTxt(m.adelTotal))}</b>`, 'Total adelantos')}
+    </div>
+    <div class="msg">Del ingreso diurno del día 1 al último turno nocturno del mes. ${fijo ? 'Un turno sin ingreso es <b>permiso</b> si tenía el día libre aprobado; si no, es <b>falta</b>.' : 'Los franqueros no tienen turnos fijos: no se cuentan faltas.'}</div>
+    ${fijo && m.sinTurno.length ? `<div class="card">${lista}</div>` : ''}`;
+}
 function fmtSaldo(h){ const t = Turnos.saldo(h); const c = Math.round(h*60) > 0 ? 'pos' : (Math.round(h*60) < 0 ? 'neg' : ''); return `<b class="${c}">${esc(t)}</b>`; }
 
 function pintarGuardias(){
@@ -1165,7 +1238,8 @@ function pintarGuardias(){
         <div class="stat"><b>${r ? r.dias : 0}</b><small>Días trabajados</small></div>
         <div class="stat"><b>${r ? r.n24 : 0}</b><small>Turnos 24 h</small></div>
         <div class="stat"><b>${r ? r.n36 : 0}</b><small>Turnos 36 h (día extra)</small></div>
-      </div></div>`;
+      </div>${(() => { const m = resumenMes(D, g); const fijo = g.turno === 'DIURNO' || g.turno === 'NOCTURNO';
+        return `<div class="gres">${fijo ? `Permisos <b>${m.permisos}</b> · Faltas <b class="${m.faltas ? 'neg' : ''}">${m.faltas}</b> · ` : ''}Adelantos <b>${m.adelConfirmados ? esc(bsTxt(m.adelTotal)) : '0'}</b></div>`; })()}</div>`;
   };
   box.innerHTML = `
     <div id="gSol"></div>
@@ -1253,9 +1327,10 @@ async function detalleGuardia(ci){
     <div class="stats">
       ${s(fmtSaldo(r ? r.saldo : 0), 'Saldo horas extras')}${s(`<b class="${r && Math.round(r.aFavor*60) ? 'pos' : ''}">${esc(Turnos.saldo(r ? r.aFavor : 0))}</b>`, 'A favor')}
       ${s(`<b class="${r && Math.round(r.enContra*60) ? 'neg' : ''}">${esc(r && Math.round(r.enContra*60) ? '-' + Turnos.duracion(Math.round(r.enContra*60)) : '0 h')}</b>`, 'En contra')}${s(`<b>${esc(Turnos.duracion(Math.round((r ? r.horas : 0)*60)))}</b>`, 'Horas trabajadas')}
-      ${s(`<b>${r ? r.dias : 0}</b>`, 'Días')}${s(`<b>${r ? r.n12 : 0}</b>`, 'Turnos 12 h')}${s(`<b>${r ? r.n24 : 0}</b>`, 'Turnos 24 h')}${s(`<b>${r ? r.n36 : 0}</b>`, 'Turnos 36 h')}
+      ${s(`<b>${r ? r.dias : 0}</b>`, 'Días que inició turno')}${s(`<b>${r ? r.n12 : 0}</b>`, 'Turnos 12 h')}${s(`<b>${r ? r.n24 : 0}</b>`, 'Turnos 24 h')}${s(`<b>${r ? r.n36 : 0}</b>`, 'Turnos 36 h')}
     </div>
     ${r && (r.vecesTarde || r.incompletos) ? `<div class="msg">${r.vecesTarde ? r.vecesTarde + ' llegada(s) tarde. ' : ''}${r.incompletos ? r.incompletos + ' turno(s) incompletos (no suman ni restan).' : ''}</div>` : ''}
+    ${resumenMesHtml(D, g)}
     <div class="h2">Ingresos y salidas</div><div class="card">${turnosHtml}${movsOtroMes(r)}</div>
     <div class="h2">Adelantos y días libres</div><div id="gSolG"><div class="empty" style="padding:16px">Cargando…</div></div>
     <div class="h2">Registros del mes</div><div id="gReg"><div class="empty" style="padding:16px">Cargando…</div></div>
@@ -1387,11 +1462,13 @@ async function cargarSolicitudes(){
     return;
   }
   pintarAvisoSol();
-  pintarSolicitudes();
+  /* con los pedidos ya leídos, las tarjetas de guardias muestran permisos y adelantos */
+  if(typeof vistaActual !== 'undefined' && vistaActual === 'gua' && GU.datos && $('#gSol')) pintarGuardias();
+  else pintarSolicitudes();
 }
 
 function itemSol(x, conEdificio){
-  const tit = x.clase === 'adelanto' ? 'Adelanto' : 'Día libre · ' + diaLibreTxt(x.fecha);
+  const tit = x.clase === 'adelanto' ? 'Adelanto' + (x.fecha ? ' · para el ' + diaLibreTxt(x.fecha) : '') : 'Día libre · ' + diaLibreTxt(x.fecha);
   const pedido = x.t.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}) + ' ' + hm(x.t);
   const quien = esc(x.guardia) + (conEdificio ? ' · ' + esc(x.ed) : '') + (x.bloque ? ' · ' + esc(x.bloque) : '');
   let estado = '', acciones = '';
@@ -1433,7 +1510,7 @@ function pintarSolicitudes(){
   const ed = st.edif, mes = mesActual();
   const atender = SOL.lista.filter(porAtender);
   /* del mes elegido, este edificio */
-  const enMes = x => { const t = x.clase === 'libre' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? new Date(x.fecha + 'T12:00:00') : (x.cuandoResp || x.t);
+  const enMes = x => { const t = x.clase === 'libre' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? new Date(x.fecha + 'T12:00:00') : x.t;
     return t.getFullYear() === mes.y && t.getMonth() === mes.m; };
   const delEd = SOL.lista.filter(x => x.ed === ed && !porAtender(x) && enMes(x));
   const adel = delEd.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado');
@@ -1460,7 +1537,7 @@ async function historialSolGuardia(ed, g, mes){
   if(!box()) return;
   const suyas = SOL.lista.filter(x => x.ed === ed && (x.ci ? x.ci === g.ci : x.guardia === g.nombre));
   if(!suyas.length){ box().innerHTML = '<div class="empty" style="padding:16px">No pidió adelantos ni días libres.</div>'; return; }
-  const delMes = suyas.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado' && (x.cuandoResp || x.t).getFullYear() === mes.y && (x.cuandoResp || x.t).getMonth() === mes.m);
+  const delMes = suyas.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado' && x.t.getFullYear() === mes.y && x.t.getMonth() === mes.m);
   const total = delMes.reduce((a, x) => a + (x.monto || 0), 0);
   box().innerHTML = `<div class="msg">Adelantos confirmados en ${esc(mesTxt(mes))}: <b>${delMes.length ? esc(bsTxt(total)) : 'ninguno'}</b>${delMes.length > 1 ? ' (' + delMes.length + ')' : ''}</div>`
     + suyas.map(x => itemSol(x, false)).join('');
@@ -2816,6 +2893,7 @@ async function pintarAjustes(){
         <div class="acts" style="margin-top:8px"><button class="btn" data-a="permitir" data-dev="${esc(x.d.dev)}" data-eq="${esc(x.d.equipo || '')}" style="color:var(--ok)">Permitir</button>
           <button class="btn" data-a="quitar" data-dev="${esc(x.d.dev)}" data-eq="${esc(x.d.equipo || '')}">Rechazar</button></div>
       </div>`).join('')}</div>` : ''}
+    <a class="btn prim" href="cobranza.html" style="display:block;text-align:center;text-decoration:none;margin-top:6px">Notas de cobranza</a>
     <div class="h2">Links para administradores</div>
     <div class="card">
       <div style="font-size:14px;color:var(--mute);margin-bottom:6px">Cada link muestra <b>solo los movimientos en vivo</b> de los edificios que marques (uno o varios). No ve guardias, informes ni otros edificios. Lo puedes cambiar o desactivar cuando quieras.</div>
