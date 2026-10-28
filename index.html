@@ -429,6 +429,22 @@ details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size
 .shead .itx{display:none}
 .menu{grid-template-columns:repeat(2,1fr)}
 @media (min-width:760px){ .menu{grid-template-columns:repeat(4,1fr)} }
+/* buscador principal (debajo del edificio) */
+.hbus{position:relative;margin-top:var(--s3)}
+.hbus input{width:100%;height:46px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--r-md);padding:0 14px 0 44px;font:inherit;font-size:max(16px,1em);box-shadow:var(--sombra);-webkit-appearance:none;appearance:none}
+.hbus input::placeholder{color:var(--mute)}
+.hlupa{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--mute);display:flex;pointer-events:none}
+@media (min-width:760px){ header > .hbus{max-width:880px;margin-left:auto;margin-right:auto} }
+#cfgBtn.on{color:var(--acc);border-color:var(--acc)}
+/* volver dentro de una sección */
+.volver{display:flex;align-items:center;gap:var(--s2);margin:0 0 var(--s4)}
+.volver .lnkbtn{display:inline-flex;align-items:center;gap:4px;padding:6px 0}
+.volver h2{margin:0;font-size:20px;letter-spacing:-.015em}
+#cCel .sic{flex:0 0 40px;height:40px;border-radius:var(--r-sm);background:var(--acc-suave);color:var(--acc);display:grid;place-items:center}
+.ichev0{color:var(--mute);display:flex}.ichev0 svg{transform:rotate(180deg)}
+/* avisos vacíos o de error: siempre dentro de una tarjeta, nunca texto suelto */
+.vista .empty,.vista .err{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sombra);padding:var(--s5) var(--s4);margin-bottom:var(--s3)}
+.vista .card .empty,.vista .lista .empty,.vista .accb .empty,.vista .card .err,.vista .lista .err,.panel .empty{background:none;border:0;box-shadow:none;margin:0}
 /* peticiones */
 #v-sol .segm + .shead{margin-top:0}
 .slista .srow{padding:var(--s4);border-top:1px solid var(--line)}
@@ -441,6 +457,12 @@ details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size
 .sfila .v small{color:var(--mute);font-size:12px;font-variant-numeric:tabular-nums}
 .sfila .lnkbtn{padding:0;font-size:13px}
 .srow .acts{margin-top:var(--s3)}
+.sfila{align-items:center}
+.sque{margin-top:var(--s3);font-weight:600;font-size:15px}
+.sque::first-letter{text-transform:uppercase}
+.smot{margin-top:2px;color:var(--ink);font-size:14px}
+.sped{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-top:var(--s2);color:var(--mute);font-size:12.5px}
+.sped .lnkbtn{padding:0;font-size:13px;white-space:nowrap}
 .srow .sconf{margin-top:var(--s3);padding-top:var(--s3);border-top:1px dashed var(--line)}
 .srow .sconf .field{margin-top:0}
 .sMsg:empty{display:none}
@@ -462,6 +484,7 @@ details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size
     <div class="brand">Osiris<small id="upd">Conectando…</small></div>
     <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">En vivo</span></div>
     <button class="btn ibtn" id="refresh" aria-label="Actualizar">↻</button>
+    <button class="btn ibtn" id="cfgBtn" aria-label="Ajustes" hidden></button>
   </div>
   <div class="row">
     <select id="edif" aria-label="Edificio"><option>Cargando edificios…</option></select>
@@ -475,6 +498,7 @@ details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size
     </select>
     <select id="mesSel" class="periodo" aria-label="Mes" hidden></select>
   </div>
+  <form class="hbus" id="hBus" role="search" hidden><span class="hlupa" id="hLupa"></span><input id="hQ" type="search" placeholder="Buscar nombre, carnet, placa o tarjeta" autocomplete="off" enterkeyhint="search" aria-label="Buscar"></form>
   <div class="tabs" id="tabs"></div>
 </header>
 
@@ -497,7 +521,7 @@ details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size
   <button data-v="gua"><span class="nico" data-ico="guardias"></span>Guardias</button>
   <button data-v="sol"><span class="nico" data-ico="peticiones"></span>Peticiones</button>
   <button data-v="cob"><span class="nico" data-ico="cobros"></span>Cobros</button>
-  <button data-v="mas"><span class="nico" data-ico="mas"></span>Más</button>
+  <button data-v="inf"><span class="nico" data-ico="informe"></span>Informe</button>
 </nav>
 
 <div class="sheet" id="sheet"><div class="panel" id="panel"></div></div>
@@ -541,6 +565,7 @@ const ICONOS = {
   buscar:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   informe:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/>',
   edificio:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  engranaje:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   ajustes:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
   ingreso:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
   salida:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
@@ -783,6 +808,14 @@ function ocultarSplash(){
 }
 setTimeout(ocultarSplash, 9000);
 let limite = PAGINA, gen = 0;
+/* lo último que se vio de cada pestaña: al volver se muestra al instante y se actualiza por detrás */
+const MOVC = {};
+const claveMov = () => st.edif + '|' + st.periodo + '|' + st.sec + '|' + limite;
+function mostrarMovGuardado(){
+  const c = MOVC[claveMov()];
+  if(c){ st.datos = c.datos; st.hayMas = c.hayMas; st.conteos = c.conteos; pintarTabs(); pintarLista(); return true; }
+  $('#list').innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; return false;
+}
 async function refrescar(manual){
   if(!st.edif) return;
   const mio = ++gen;          // si cambian edificio/pestaña a mitad de carga, se descarta la respuesta vieja
@@ -792,6 +825,7 @@ async function refrescar(manual){
     const [ev, cont, pres, tur] = await Promise.all([cargarEventos(limite), cargarConteos(), cargarPresencia(), cargarTurnos()]);
     if(mio !== gen || edif !== st.edif || sec !== st.sec) return;
     st.datos = ev.datos; st.hayMas = ev.hayMas; st.conteos = cont;
+    MOVC[claveMov()] = {datos: ev.datos, hayMas: ev.hayMas, conteos: cont};
     pintarPresencia(pres, tur); pintarTabs(); pintarLista();
     $('#dot').classList.remove('off'); $('#liveTxt').textContent = 'En vivo';
     $('#upd').textContent = st.edif + ' · actualizado ' + new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -948,18 +982,17 @@ function verFoto(u){ $('#lbimg').src = u; $('#lbdl').href = u; $('#lb').classLis
 $('#tabs').addEventListener('click', ev => {
   const b = ev.target.closest('.tab'); if(!b) return;
   st.sec = b.dataset.k; limite = PAGINA; st.datos = []; pintarTabs();
-  $('#list').innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
-  refrescar(); scrollTo({top:0});
+  mostrarMovGuardado(); refrescar(); scrollTo({top:0});
 });
 $('#edif').addEventListener('change', e => {
   st.edif = e.target.value; guardar('edif', st.edif); limite = PAGINA; st.datos = [];
   const u = new URL(location.href); u.searchParams.set('e', st.edif); history.replaceState(null, '', u);
-  $('#list').innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; refrescar();
+  mostrarMovGuardado(); refrescar();
   if(typeof alCambiarEdificio === 'function') alCambiarEdificio();
 });
 $('#periodo').addEventListener('change', e => {
   st.periodo = e.target.value; guardar('periodo', st.periodo); limite = PAGINA; st.datos = [];
-  $('#list').innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; refrescar();
+  mostrarMovGuardado(); refrescar();
 });
 /* Recargar: sirve en TODAS las vistas, gira mientras carga y no se encima si lo tocan dos veces */
 $('#refresh').innerHTML = icono('recargar', 20);
@@ -1437,7 +1470,6 @@ async function horasDelMes(ed, y, m, registro, cfg){
 async function cargarGuardias(){
   const box = $('#v-gua'); if(!st.edif){ box.innerHTML = '<div class="empty">Elige un edificio.</div>'; return; }
   const mio = ++GU.gen, ed = st.edif, mes = mesActual();
-  cargarSolicitudes();
   if(!GU.datos || GU.datos.ed !== ed) box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
   try{
     const [registro, cfg] = await Promise.all([leerRegistro(ed), leerConfig(ed)]);
@@ -1540,7 +1572,6 @@ function pintarGuardias(){
         return `<div class="gres">${fijo ? `Permisos <b>${m.permisos}</b> · Faltas <b class="${m.faltas ? 'neg' : ''}">${m.faltas}</b> · ` : ''}Adelantos <b>${m.adelConfirmados ? esc(bsTxt(m.adelTotal)) : '0'}</b></div>`; })()}</div>`;
   };
   box.innerHTML = `
-    ${(() => { const n = SOL.lista.filter(porAtender).length; return n ? `<button class="aviso" id="gIrSol"><span class="pill warn">${n}</span><span class="t">${n === 1 ? 'Una petición por responder' : n + ' peticiones por responder'}</span>${icono('atras', 16)}</button>` : ''; })()}
     <div class="shead"><div class="h2">Guardias · ${activos.length} activo${activos.length === 1 ? '' : 's'}</div>
       <div class="sder">${info((D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.') + ' Un turno de 36 h cuenta como día extra, no como horas extras.' + ` Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.`, 'Cómo se calculan las horas')}<button class="btn chico" id="gNuevo">${icono('mas1', 15)} Registrar</button></div></div>
     ${activos.length ? activos.map(card).join('') : '<div class="card"><div class="empty">Sin guardias registrados.</div></div>'}
@@ -1550,7 +1581,6 @@ function pintarGuardias(){
 }
 
 $('#v-gua').addEventListener('click', ev => {
-  if(ev.target.closest('#gIrSol')) return irA('sol');
   if(ev.target.id === 'gNuevo') return formGuardia();
   if(ev.target.id === 'gBajas'){ GU.verBajas = !GU.verBajas; return pintarGuardias(); }
   const c = ev.target.closest('.gcard'); if(c) detalleGuardia(c.dataset.ci);
@@ -1622,6 +1652,8 @@ async function detalleGuardia(ci){
   const s = (v, l) => `<div class="stat">${v}<small>${l}</small></div>`;
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
     <h2>${esc(g.nombre)}</h2><div class="sub">ID ${esc(g.ci)} · ${TURNO_TXT[g.turno] || esc(g.turno)}${g.bloque ? ' · ' + esc(g.bloque) : ''} · ${g.activo ? 'Activo' : 'De baja'} · ${esc(mesTxt(D.mes))}</div>
+    <div class="shead" style="margin-top:0"><div class="h2">Horas del mes</div><button class="btn chico" id="gPdf" data-ci="${esc(g.ci)}">${icono('informe', 15)} Descargar PDF</button></div>
+    <div id="gPdfMsg"></div>
     <div class="stats">
       ${s(fmtSaldo(r ? r.saldo : 0), 'Saldo horas extras')}${s(`<b class="${r && Math.round(r.aFavor*60) ? 'pos' : ''}">${esc(Turnos.saldo(r ? r.aFavor : 0))}</b>`, 'A favor')}
       ${s(`<b class="${r && Math.round(r.enContra*60) ? 'neg' : ''}">${esc(r && Math.round(r.enContra*60) ? '-' + Turnos.duracion(Math.round(r.enContra*60)) : '0 h')}</b>`, 'En contra')}${s(`<b>${esc(Turnos.duracion(Math.round((r ? r.horas : 0)*60)))}</b>`, 'Horas trabajadas')}
@@ -1630,7 +1662,7 @@ async function detalleGuardia(ci){
     ${r && (r.vecesTarde || r.incompletos) ? `<div class="msg">${r.vecesTarde ? r.vecesTarde + ' llegada(s) tarde. ' : ''}${r.incompletos ? r.incompletos + ' turno(s) incompletos (no suman ni restan).' : ''}</div>` : ''}
     ${resumenMesHtml(D, g)}
     <div class="h2">Ingresos y salidas</div><div class="card">${turnosHtml}${movsOtroMes(r)}</div>
-    <div class="h2">Adelantos y días libres</div><div id="gSolG"><div class="carga" role="status" aria-label="Cargando"></div></div>
+    <div class="h2">Adelantos y días libres</div><div id="gSolG"></div>
     <div class="h2">Registros del mes</div><div id="gReg"><div class="carga" role="status" aria-label="Cargando"></div></div>
     <div class="h2">Acciones</div>
     <div class="acts">
@@ -1661,19 +1693,130 @@ async function detalleGuardia(ci){
   historialSolGuardia(D.ed, g, D.mes);
   /* registros del mes de este guardia (por su CI) */
   try{
-    const desde = new Date(D.mes.y, D.mes.m, 1), hasta = new Date(D.mes.y, D.mes.m + 1, 2);
-    const regs = (await paginas('eventos?select=*&edificio=eq.' + enc(D.ed) + '&detalle->>guard_ci=eq.' + enc(g.ci)
-      + '&created_at=gte.' + enc(desde.toISOString()) + '&created_at=lt.' + enc(hasta.toISOString()) + '&order=created_at.desc'))
-      .filter(e => { const t = horaReal(e); return t >= desde && t < new Date(D.mes.y, D.mes.m + 1, 1); })
-      .filter(e => !['Ingreso de turno','Salida de turno','Doblar turno','Solicitud'].includes(e.tipo))
-      .sort((a,b) => horaReal(b) - horaReal(a));
+    const regs = await registrosGuardia(D, g);
     const cont = {}; regs.forEach(e => cont[e.tipo] = (cont[e.tipo]||0) + 1);
-    $('#gReg').innerHTML = !regs.length ? '<div class="empty" style="padding:16px">Sin rondas, visitas ni novedades registradas.</div>'
+    $('#gReg').innerHTML = !regs.length ? '<div class="lista"><div class="empty">Sin rondas, visitas ni novedades registradas.</div></div>'
       : `<div class="msg">${Object.entries(cont).map(([k,v]) => esc((ESTILO[k]||{t:k}).t) + ': <b>' + v + '</b>').join(' · ')}</div>`
         + `<div class="card">${regs.slice(0, 150).map(e => { const t = horaReal(e), d = detalleDe(e);
           return `<div class="turno"><div class="tl"><b>${esc((ESTILO[e.tipo]||{t:e.tipo}).t)}</b><span>${esc(t.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}))} ${esc(hm(t))}</span></div><div class="mv">${esc(resumen(e, d))}</div></div>`; }).join('')}</div>`;
   }catch(e){ $('#gReg').innerHTML = `<div class="err" style="padding:16px">No se pudieron leer los registros (${esc(e.message)}).</div>`; }
 }
+
+/* Registros del mes de un guardia (se guardan: el PDF y la ficha usan los mismos) */
+async function registrosGuardia(D, g){
+  GU.regs = GU.regs || {};
+  const k = D.ed + '|' + D.mes.y + '-' + D.mes.m + '|' + g.ci;
+  if(GU.regs[k]) return GU.regs[k];
+  const desde = new Date(D.mes.y, D.mes.m, 1), hasta = new Date(D.mes.y, D.mes.m + 1, 2);
+  const regs = (await paginas('eventos?select=*&edificio=eq.' + enc(D.ed) + '&detalle->>guard_ci=eq.' + enc(g.ci)
+    + '&created_at=gte.' + enc(desde.toISOString()) + '&created_at=lt.' + enc(hasta.toISOString()) + '&order=created_at.desc'))
+    .filter(e => { const t = horaReal(e); return t >= desde && t < new Date(D.mes.y, D.mes.m + 1, 1); })
+    .filter(e => !['Ingreso de turno','Salida de turno','Doblar turno','Solicitud'].includes(e.tipo))
+    .sort((a,b) => horaReal(b) - horaReal(a));
+  return GU.regs[k] = regs;
+}
+
+/* ---------- PDF de la ficha: todo lo que muestra, en hoja carta, con poca tinta ---------- */
+async function pdfGuardia(ci){
+  const D = GU.datos, g = D && D.registro.get(ci); if(!g) return;
+  const box = $('#gPdfMsg'), btn = $('#gPdf');
+  const paso = t => box.innerHTML = `<div class="msg">${esc(t)}</div>`;
+  btn.disabled = true;
+  try{
+    paso('Preparando el PDF…');
+    const [JsPDF, regs] = await Promise.all([cargarJsPDF(), registrosGuardia(D, g).catch(() => [])]);
+    const r = D.horas.get(ci), m = resumenMes(D, g), fijo = g.turno === 'DIURNO' || g.turno === 'NOCTURNO';
+    const doc = new JsPDF({unit:'mm', format:'letter'});
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 16;
+    const tinta = [17, 20, 24], gris = [91, 100, 114], linea = [205, 210, 218];
+    let y = 0;
+    /* encabezado */
+    try{ doc.addImage(LOGO_OSCURO, 'PNG', M, 12, 34, 34 * 226 / 480); }catch(_){}
+    doc.setTextColor(...tinta); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text('Ficha del guardia', W - M, 18, {align:'right'});
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...gris);
+    doc.text(pdfTxt(`${D.ed}  |  ${mesTxt(D.mes)}`), W - M, 23.5, {align:'right'});
+    doc.setDrawColor(...tinta); doc.setLineWidth(0.5); doc.line(M, 32, W - M, 32);
+    doc.setTextColor(...tinta); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.text(pdfTxt(g.nombre), M, 42);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...gris);
+    doc.text(pdfTxt(`CI ${g.ci}   |   Turno ${TURNO_TXT[g.turno] || g.turno}${g.bloque ? '   |   ' + g.bloque : ''}   |   ${g.activo ? 'Activo' : 'De baja'}`), M, 48);
+    y = 58;
+    const titulo = t => {
+      if(y > H - 40){ doc.addPage(); y = 22; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...tinta); doc.text(pdfTxt(t), M, y);
+      doc.setDrawColor(...linea); doc.setLineWidth(0.25); doc.line(M, y + 1.8, W - M, y + 1.8); y += 4;
+    };
+    const tabla = (cols, filas, extra = {}) => {
+      if(!filas.length){ doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...gris); doc.text('Sin registros en el mes.', M, y + 5); y += 13; return; }
+      doc.autoTable({startY: y + 1, margin:{left:M, right:M, top:20, bottom:18}, theme:'plain',
+        head: cols ? [cols.map(pdfTxt)] : undefined, body: filas.map(f => f.map(pdfTxt)),
+        styles:{font:'helvetica', fontSize:8.8, textColor:[40, 46, 54], cellPadding:{top:1.9, bottom:1.9, left:1.6, right:1.6}, overflow:'linebreak', valign:'middle'},
+        headStyles:{fontStyle:'bold', textColor: tinta, fontSize:8.5},
+        didDrawCell: c => { if(c.section === 'body' || c.section === 'head'){ doc.setDrawColor(...(c.section === 'head' ? tinta : linea)); doc.setLineWidth(c.section === 'head' ? 0.35 : 0.15); doc.line(c.cell.x, c.cell.y + c.cell.height, c.cell.x + c.cell.width, c.cell.y + c.cell.height); } },
+        ...extra});
+      y = doc.lastAutoTable.finalY + 9;
+    };
+    /* pares etiqueta / valor en dos columnas */
+    const pares = l => { const f = []; for(let i = 0; i < l.length; i += 2) f.push([l[i][0], l[i][1], l[i + 1] ? l[i + 1][0] : '', l[i + 1] ? l[i + 1][1] : '']); return f; };
+    const negr = {0:{textColor:gris}, 1:{fontStyle:'bold', halign:'right', cellWidth:34}, 2:{textColor:gris, cellPadding:{top:1.9, bottom:1.9, left:10, right:1.6}}, 3:{fontStyle:'bold', halign:'right', cellWidth:34}};
+    const enContra = r && Math.round(r.enContra * 60) ? '-' + Turnos.duracion(Math.round(r.enContra * 60)) : '0 h';
+    titulo('Horas del mes');
+    tabla(null, pares([
+      ['Saldo horas extras', g.turno === 'FRANQUERO' ? 'No aplica' : Turnos.saldo(r ? r.saldo : 0)], ['Horas trabajadas', Turnos.duracion(Math.round((r ? r.horas : 0) * 60))],
+      ['A favor', Turnos.saldo(r ? r.aFavor : 0)], ['En contra', enContra],
+      ['Días que inició turno', String(r ? r.dias : 0)], ['Turnos de 12 h', String(r ? r.n12 : 0)],
+      ['Turnos de 24 h', String(r ? r.n24 : 0)], ['Turnos de 36 h', String(r ? r.n36 : 0)],
+      ['Llegadas tarde', String(r ? r.vecesTarde : 0)], ['Turnos incompletos', String(r ? r.incompletos : 0)]]), {columnStyles: negr});
+    titulo('Resumen del mes');
+    tabla(null, pares([
+      ...(fijo ? [['Permisos', String(m.permisos)], ['Faltas', String(m.faltas)]] : []),
+      ['Días libres pedidos', String(m.libresPedidos)], ['Adelantos pedidos', String(m.adelPedidos)],
+      ['Adelantos confirmados', String(m.adelConfirmados)], ['Total adelantos', bsTxt(m.adelTotal)]]), {columnStyles: negr});
+    if(fijo){
+      titulo('Turnos sin ingreso');
+      tabla(['Fecha', 'Hora', 'Situación', 'Cubrió'], m.sinTurno.map(x => [fDia(x.t0), fHora(x.t0), x.permiso ? 'Permiso' : 'Falta', x.cubrio || 'Nadie registró ese turno']),
+        {columnStyles:{0:{cellWidth:24}, 1:{cellWidth:16}, 2:{cellWidth:22, fontStyle:'bold'}}});
+    }
+    titulo('Ingresos y salidas');
+    const cuentaAqui = new Set(r ? r.movs : []);
+    tabla(['Inicio', 'Fin', 'Turno', 'Duración', 'Estado', 'Horas extras'], (r ? r.turnos : []).map(t => [
+      fDiaHora(t.inicio), t.fin && t.estado !== 'sin ingreso' ? fDiaHora(t.fin) : '', t.nivel + ' h', t.cerrado ? Turnos.duracion(Math.round(t.horas * 60)) : '',
+      t.estado === 'ok' ? 'Completo' : t.estado === 'abierto' ? 'En turno' : t.estado.charAt(0).toUpperCase() + t.estado.slice(1),
+      [...t.movimientos.map(mv => Turnos.saldo(mv.horas) + ' ' + mv.motivo + (mv.con ? ' (' + mv.con + ')' : '') + (cuentaAqui.has(mv) ? '' : ', mes anterior')), ...t.notas].join('\n')]),
+      {columnStyles:{0:{cellWidth:24}, 1:{cellWidth:24}, 2:{cellWidth:14}, 3:{cellWidth:20}, 4:{cellWidth:22}}});
+    titulo('Adelantos y días libres');
+    const suyas = SOL.lista.filter(x => x.ed === D.ed && (x.ci ? x.ci === g.ci : x.guardia === g.nombre));
+    tabla(['Pedido', 'Tipo', 'Para el día', 'Motivo', 'Estado', 'Monto'], suyas.map(x => [fDiaHora(x.t), x.clase === 'libre' ? 'Día libre' : 'Adelanto',
+      /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? fDia(new Date(x.fecha + 'T12:00:00')) : '', x.motivo || '', (SOL_EST[x.estado] || [x.estado])[0],
+      x.estado === 'confirmado' ? bsTxt(x.monto) : '']), {columnStyles:{0:{cellWidth:24}, 1:{cellWidth:20}, 2:{cellWidth:22}, 5:{cellWidth:22, halign:'right'}}});
+    titulo('Registros del mes');
+    tabla(['Fecha', 'Hora', 'Tipo', 'Detalle'], regs.map(e => { const t = horaReal(e); return [fDia(t), fHora(t), (ESTILO[e.tipo] || {t:e.tipo}).t, resumen(e, detalleDe(e))]; }),
+      {columnStyles:{0:{cellWidth:22}, 1:{cellWidth:14}, 2:{cellWidth:30}}});
+    /* pie en cada página */
+    const n = doc.internal.getNumberOfPages(), ahora = new Date();
+    for(let i = 1; i <= n; i++){
+      doc.setPage(i);
+      doc.setDrawColor(...linea); doc.setLineWidth(0.2); doc.line(M, H - 12, W - M, H - 12);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gris);
+      doc.text(pdfTxt(`OSIRIS Security  |  ${g.nombre}  |  Generado el ${fDia(ahora)} a las ${fHora(ahora)}`), M, H - 7.5);
+      doc.text(`Página ${i} de ${n}`, W - M, H - 7.5, {align:'right'});
+    }
+    const nombre = pdfTxt(`Ficha ${g.nombre} ${mesTxt(D.mes)}.pdf`).replace(/[\\/:*?"<>|]/g, '-');
+    const blob = doc.output('blob'), url = URL.createObjectURL(blob);
+    GU.pdf = {blob, nombre};
+    box.innerHTML = `<div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${url}" download="${esc(nombre)}" target="_blank" rel="noopener">Abrir / descargar</a><button class="btn" id="gPdfShare">Compartir</button></div>`;
+  }catch(e){ box.innerHTML = `<div class="msg bad">No se pudo generar el PDF (${esc(e.message)}).</div>`; }
+  finally{ btn.disabled = false; }
+}
+$('#panel').addEventListener('click', async e => {
+  const b = e.target.closest('#gPdf'); if(b) return pdfGuardia(b.dataset.ci);
+  if(e.target.closest('#gPdfShare') && GU.pdf){
+    const f = new File([GU.pdf.blob], GU.pdf.nombre, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[f]})){ try{ await navigator.share({files:[f], title:GU.pdf.nombre}); }catch(_){} }
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(GU.pdf.blob); a.download = GU.pdf.nombre; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 3000); }
+  }
+});
 
 function eliminarGuardia(g){
   const D = GU.datos;
@@ -1761,64 +1904,61 @@ async function cargarSolicitudes(){
   }
   pintarAvisoSol();
   /* con los pedidos ya leídos, las tarjetas de guardias muestran permisos y adelantos */
-  if(typeof vistaActual !== 'undefined' && vistaActual === 'gua' && GU.datos) pintarGuardias();
+  if(GU.datos && $('#v-gua').innerHTML.trim()) pintarGuardias();
   if(typeof vistaActual !== 'undefined' && vistaActual === 'sol') pintarSolicitudes();
 }
 
 const SOL_EST = {pendiente:['Pendiente','warn'], aprobado:['Aprobado','ok'], por_confirmar:['Por confirmar','warn'],
   confirmado:['Entregado','ok'], rechazado:['No aprobado',''], no_entregado:['No entregado','']};
+const fechaLarga = d => d.toLocaleDateString('es',{weekday:'long', day:'numeric', month:'long'});
 function itemSol(x, conEdificio){
-  const tipo = x.clase === 'adelanto' ? 'Adelanto' : 'Día libre';
-  const cuando = x.clase === 'libre' ? diaLibreTxt(x.fecha) : (x.fecha ? diaLibreTxt(x.fecha) : '');
-  const pedido = x.t.toLocaleDateString('es',{day:'2-digit',month:'short'}) + ', ' + hm(x.t);
-  const linea = [tipo + (cuando ? ' para el ' + cuando : ''), x.motivo].filter(Boolean).join('. ');
+  const libre = x.clase === 'libre';
+  const dia = /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? fechaLarga(new Date(x.fecha + 'T12:00:00')) : '';
+  const que = libre ? 'Día libre: ' + (dia || 'sin fecha') : 'Adelanto de sueldo' + (dia ? ' para el ' + dia : '');
   const donde = [conEdificio ? x.ed : '', x.bloque].filter(Boolean).join(', ');
+  const pedido = 'Pedido el ' + fechaLarga(x.t) + ', ' + hm(x.t);
   const b = (est, txt, cls = 'btn') => `<button class="${cls}" data-sact="${est}" data-sid="${esc(x.sid)}">${txt}</button>`;
   let [et, cl] = SOL_EST[x.estado] || ['', ''];
-  if(x.estado === 'aprobado' && x.clase === 'adelanto') et = 'Aprobado, falta el monto';
+  if(x.estado === 'aprobado' && !libre) et = 'Aprobado, falta el monto';
   if(x.estado === 'confirmado') et = 'Entregado ' + bsTxt(x.monto);
   let pie = '';
-  if(x.estado === 'pendiente') pie = `<div class="acts">${b('rechazado', 'No aprobar')}${b('aprobado', 'Aprobar', 'btn prim')}</div>`;
+  if(x.estado === 'pendiente') pie = `<div class="acts">${b('rechazado', 'Denegar')}${b('aprobado', 'Aceptar', 'btn prim')}</div>`;
   else if(x.estado === 'por_confirmar') pie = `<div class="sconf"><label class="field"><span>El guardia dice que recibió ${esc(bsTxt(x.montoGuardia))}. Monto entregado</span>
       <input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(x.montoGuardia)}" data-smonto="${esc(x.sid)}"></label>
       <div class="acts">${b('no_entregado', 'No se lo di')}${b('confirmado', 'Confirmar', 'btn prim')}</div></div>`;
-  const cambiar = x.estado === 'aprobado' ? b('rechazado', 'Cambiar', 'lnkbtn') : x.estado === 'rechazado' ? b('aprobado', 'Cambiar', 'lnkbtn') : '';
+  const cambiar = x.estado === 'aprobado' ? b('rechazado', 'Cambiar a denegado', 'lnkbtn') : x.estado === 'rechazado' ? b('aprobado', 'Cambiar a aceptado', 'lnkbtn') : '';
   return `<div class="srow">
-    <div class="sfila">
-      <div class="t"><b>${esc(x.guardia)}</b><small>${esc(linea)}</small>${donde ? `<small>${esc(donde)}</small>` : ''}</div>
-      <div class="v"><span class="pill ${cl}">${esc(et)}</span><small>${esc(pedido)}</small>${cambiar}</div>
-    </div>${pie}<div class="sMsg" data-smsg="${esc(x.sid)}"></div></div>`;
+    <div class="sfila"><div class="t"><b>${esc(x.guardia)}</b>${donde ? `<small>${esc(donde)}</small>` : ''}</div><span class="pill ${cl}">${esc(et)}</span></div>
+    <div class="sque">${esc(que)}</div>
+    ${x.motivo ? `<div class="smot">Motivo: ${esc(x.motivo)}</div>` : ''}
+    <div class="sped"><span>${esc(pedido)}</span>${cambiar}</div>
+    ${pie}<div class="sMsg" data-smsg="${esc(x.sid)}"></div></div>`;
 }
 const SOLV = {filtro:'pend'};
 function pintarSolicitudes(){
   const box = $('#v-sol'); if(!box || vistaActual !== 'sol') return;
-  if(!SOL.cargado){ box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; return; }
-  const ed = st.edif, mes = mesActual();
+  if(!SOL.cargado){ if(!box.innerHTML.trim()) box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; return; }
+  const hoy = new Date(), nomMes = hoy.toLocaleDateString('es',{month:'long'});
+  const esteMes = d => d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth();
   const atender = SOL.lista.filter(porAtender);
-  const enMes = x => { const t = x.clase === 'libre' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) ? new Date(x.fecha + 'T12:00:00') : x.t;
-    return t.getFullYear() === mes.y && t.getMonth() === mes.m; };
-  const delMes = SOL.lista.filter(x => x.ed === ed && enMes(x));
-  const adel = delMes.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado');
+  const resp = SOL.lista.filter(x => !porAtender(x)).sort((a, b) => (b.cuandoResp || b.t) - (a.cuandoResp || a.t));
+  const adel = SOL.lista.filter(x => x.clase === 'adelanto' && x.estado === 'confirmado' && esteMes(x.cuandoResp || x.t));
   const total = adel.reduce((a, x) => a + (x.monto || 0), 0);
-  const libres = delMes.filter(x => x.clase === 'libre' && x.estado === 'aprobado');
+  const libres = SOL.lista.filter(x => x.clase === 'libre' && x.estado === 'aprobado' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && esteMes(new Date(x.fecha + 'T12:00:00')));
   const f = SOLV.filtro;
-  const filtros = [['pend', 'Pendientes'], ['adel', 'Adelantos'], ['libre', 'Días libres']];
-  let lista, vacio;
-  if(f === 'pend'){ lista = atender; vacio = 'No hay peticiones por responder.'; }
-  else if(f === 'adel'){ lista = delMes.filter(x => x.clase === 'adelanto' && !porAtender(x)); vacio = 'Sin adelantos en el mes.'; }
-  else { lista = delMes.filter(x => x.clase === 'libre' && !porAtender(x)); vacio = 'Sin días libres en el mes.'; }
-  const nomMes = new Date(mes.y, mes.m, 1).toLocaleDateString('es',{month:'long'});
+  const lista = f === 'pend' ? atender : resp.slice(0, 80);
+  const vacio = f === 'pend' ? 'No hay peticiones por responder.' : 'Todavía no respondiste ninguna petición.';
   box.innerHTML = `
+    <div class="shead" style="margin-top:0"><div class="h2">Resumen de ${esc(nomMes)}</div><div class="sder">${info('Se muestran los pedidos de todos los edificios, sin elegir uno. Aquí llegan los pedidos de adelanto y de día libre de los guardias de todos los edificios. Un adelanto cuenta recién cuando confirmas el monto que entregaste.', 'Cómo funciona')}</div></div>
     <div class="kpis">
       <div class="kpi"><b class="${atender.length ? 'warnT' : ''}">${atender.length}</b><small>Por responder</small></div>
       <div class="kpi"><b>${esc(bsTxt(total))}</b><small>Adelantos</small></div>
       <div class="kpi"><b>${libres.length}</b><small>Días libres</small></div>
     </div>
-    <div class="segm" id="solF">${filtros.map(([k, t]) => `<button class="${f === k ? 'on' : ''}" data-f="${k}">${esc(t)}</button>`).join('')}</div>
-    <div class="shead"><div class="h2">${f === 'pend' ? 'Todos los edificios' : esc(st.edif + ', ' + nomMes)}</div><div class="sder">${info(f === 'pend' ? 'Aquí llegan los pedidos de todos los edificios. Un adelanto aprobado cuenta recién cuando confirmas el monto que entregaste.' : 'Se muestran los pedidos del edificio y mes elegidos arriba.', 'Cómo funciona')}</div></div>
-    <div class="lista slista">${lista.length ? lista.map(x => itemSol(x, f === 'pend')).join('') : `<div class="empty">${vacio}</div>`}</div>
-`;
+    <div class="segm" id="solF">${[['pend', 'Por responder'], ['resp', 'Respondidas']].map(([k, t]) => `<button class="${f === k ? 'on' : ''}" data-f="${k}">${t}${k === 'pend' && atender.length ? ' (' + atender.length + ')' : ''}</button>`).join('')}</div>
+    <div class="lista slista">${lista.length ? lista.map(x => itemSol(x, true)).join('') : `<div class="empty">${vacio}</div>`}</div>`;
 }
+
 async function historialSolGuardia(ed, g, mes){
   const box = () => $('#gSolG');
   SOL.ficha = {ed, g, mes};
@@ -2775,7 +2915,7 @@ async function generarInforme(){
 /* ===================== EDIFICIO: ajustes, celulares y datos (solo supervisión) ===================== */
 const ED = {sub:'ajustes', gen:0, cfg:null, datos:{}, sucio:{}, filtro:'', editIdx:null};
 const SUBS = [
-  ['ajustes','Ajustes'], ['celulares','Celulares'], ['propietarios','Propietarios'], ['residentes','Residentes'],
+  ['ajustes','Funciones y turnos'], ['celulares','Celulares'], ['propietarios','Propietarios'], ['residentes','Residentes'],
   ['vehiculos','Vehículos'], ['contactos','Contactos'], ['recurrentes','Recurrentes'], ['normativas','Reglamentos'], ['puntos_control','Puntos de ronda'],
 ];
 const MODULOS = [['visitas','Visitas'],['visitas_recu','Visitas recurrentes'],['hospedajes','Hospedajes'],['rondas','Rondas'],
@@ -2808,7 +2948,7 @@ const edSeguro = ed => String(ed).replace(/[^A-Za-z0-9]/g, '_');
 
 function pintarEdificio(){
   const box = $('#v-edi');
-  box.innerHTML = `<div class="secsel"><select id="edSub" aria-label="Sección">${SUBS.map(([k,t]) =>
+  box.innerHTML = `<div class="volver"><button class="lnkbtn" id="edVolver">${icono('atras', 16)} Ajustes</button></div><div class="shead" style="margin-top:0"><div class="h2">Celulares corporativos, ${esc(st.edif || '')}</div></div><div class="secsel"><select id="edSub" aria-label="Sección">${SUBS.map(([k,t]) =>
     `<option value="${k}" ${ED.sub === k ? 'selected' : ''}>${esc(t)}${ED.sucio[k] ? ' •' : ''}</option>`).join('')}</select></div><div id="edCuerpo"><div class="carga" role="status" aria-label="Cargando"></div></div>`;
   box.querySelector('#edSub').onchange = e => {
     const nuevo = e.target.value;
@@ -2821,6 +2961,7 @@ function pintarEdificio(){
   return cargarLista(ED.sub);
 }
 $('#v-edi').addEventListener('click', e => {
+  if(e.target.closest('#edVolver')){ if(NAV.pila.length && NAV.pila[NAV.pila.length - 1].vista === 'cfg') history.back(); else irA('cfg'); return; }
   const b = e.target.closest('[data-sub]');
   if(b){
     if(ED.sucio[ED.sub] && ED.sub !== b.dataset.sub && !confirm('Tienes cambios sin enviar en esta lista. ¿Salir igual? (se pierden)')) return;
@@ -3240,18 +3381,16 @@ const SERVIDOR = 'Supabase (PostgreSQL) - proyecto idwsbukgtogiwvfrurlc';
 function pintarBuscar(){
   $('#v-bus').innerHTML = `
     <div class="card">
-      <div class="sbar"><input id="bQ" class="inp" type="search" value="${esc(BUS.q)}" placeholder="Nombre, carnet o tarjeta" autocomplete="off" enterkeyhint="search"><button class="btn" id="bIr">Buscar</button></div>
-      <div class="chips" id="bTipos">${TIPOS_BUS.map(([k,t]) => `<button class="tab${BUS.tipo === k ? ' on' : ''}" data-bt="${k}">${t}</button>`).join('')}</div>
+      <div class="chips" id="bTipos" style="margin-top:0">${TIPOS_BUS.map(([k,t]) => `<button class="tab${BUS.tipo === k ? ' on' : ''}" data-bt="${k}">${t}</button>`).join('')}</div>
       <label class="drow"><span>Día</span><input id="bDia" class="inp" type="date" value="${esc(BUS.dia)}"></label>
     </div>
-    <div id="bRes">${BUS.res.length ? '' : '<div class="empty">Busca en el mes elegido arriba.</div>'}</div>`;
+    <div id="bRes">${BUS.res.length ? '' : '<div class="lista"><div class="empty">Escribe arriba y toca Buscar. Se busca en el mes elegido.</div></div>'}</div>`;
   if(BUS.res.length) pintarResultados();
 }
-$('#v-bus').addEventListener('keydown', e => { if(e.target.id === 'bQ' && e.key === 'Enter'){ e.preventDefault(); buscar(); } });
+$('#v-bus').addEventListener('change', e => { if(e.target.id === 'bDia' && (BUS.q || BUS.res.length)) buscar(); });
 $('#v-bus').addEventListener('click', e => {
   const t = e.target;
-  if(t.dataset && t.dataset.bt){ BUS.tipo = t.dataset.bt; [...$('#bTipos').children].forEach(b => b.classList.toggle('on', b === t)); return; }
-  if(t.id === 'bIr') return buscar();
+  if(t.dataset && t.dataset.bt){ BUS.tipo = t.dataset.bt; [...$('#bTipos').children].forEach(b => b.classList.toggle('on', b === t)); if(BUS.q || BUS.res.length) buscar(); return; }
   if(t.id === 'bTodos'){ const todos = BUS.sel.size < BUS.res.length; BUS.sel = new Set(todos ? BUS.res.map((_, i) => i) : []); return pintarResultados(); }
   if(t.id === 'bCert') return generarCertificado();
   if(t.id === 'bShare'){ compartirPdf(); return; }
@@ -3265,9 +3404,9 @@ const textoBusqueda = e => sinTildes([e.tipo, e.guardia, ...Object.entries(detal
   .map(([, v]) => typeof v === 'object' ? JSON.stringify(v) : v)].join(' ')).replace(/\s+/g, ' ');
 
 async function buscar(){
-  BUS.q = $('#bQ').value.trim(); BUS.dia = $('#bDia').value;
+  BUS.dia = $('#bDia') ? $('#bDia').value : BUS.dia;
   const mio = ++BUS.gen, ed = st.edif, mes = mesActual(), box = $('#bRes');
-  box.innerHTML = '<div class="empty">Buscando…</div>';
+  box.innerHTML = '<div class="carga" role="status" aria-label="Buscando"></div>';
   try{
     let desde = new Date(mes.y, mes.m, 1), hasta = new Date(mes.y, mes.m + 1, 1);
     if(BUS.dia){ const [y, mm, d] = BUS.dia.split('-').map(Number); desde = new Date(y, mm - 1, d); hasta = new Date(y, mm - 1, d + 1); }
@@ -3725,7 +3864,7 @@ function urlLink(token){ const u = new URL(location.href); u.search = '?a=' + to
 let GLINKS = [];
 async function pintarAjustes(){
   const box = $('#v-cfg');
-  box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
+  if(!box.innerHTML.trim()) box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
   let links = [];
   let devRows = [], glinks = [];
   GLINKS = [];
@@ -3759,6 +3898,7 @@ async function pintarAjustes(){
         : `<button class="btn" data-a="permitir" data-dev="${esc(d.dev)}" data-eq="${esc(d.equipo || '')}" style="color:var(--ok)">Permitir</button><button class="btn" data-a="quitar" data-dev="${esc(d.dev)}" data-eq="${esc(d.equipo || '')}">Rechazar</button>`}</div>`).join(''); };
   const usados = tok => { const m = devsDe.get(tok); return m ? [...m.values()].filter(d => d.estado === 'ok').length : 0; };
   box.innerHTML = `
+    <div class="lista"><div class="it" id="cCel"><span class="sic">${icono('celular', 20)}</span><div class="t"><b>Celulares corporativos</b><small>Funciones, turnos y datos que reciben los celulares de cada edificio</small></div><span class="ichev0">${icono('atras', 16)}</span></div></div>
     ${pendientes ? `<div class="h2" style="color:var(--warn)">Piden acceso (${pendientes})</div><div class="card">${solicitudes.map(x => `
       <div class="lnk" data-tok="${esc(x.tok)}" data-url="${esc(x.l.url)}" data-nom="${esc(x.l.nombre)}" data-ed="${esc(x.l.ed)}" data-clase="${x.l.clase}">
         <b>${esc(x.d.equipo || 'Dispositivo')}</b>
@@ -3823,6 +3963,7 @@ function aplicarTema(t){
 aplicarTema(temaActual());
 $('#v-cfg').addEventListener('click', async ev => {
   const t = ev.target;
+  if(t.closest('#cCel')) return irA('edi');
   const tb = t.closest('[data-tema]');
   if(tb){ guardar('tema', tb.dataset.tema); aplicarTema(tb.dataset.tema);
     tb.parentNode.querySelectorAll('[data-tema]').forEach(b => b.classList.toggle('on', b === tb));
@@ -3979,61 +4120,81 @@ window.addEventListener('popstate', () => {
     }).observe($(id), {attributes:true, attributeFilter:['class']});
   }
 })();
+/* Cada sección guarda lo que ya pintó (edificio y mes): al volver se muestra tal cual,
+   sin volver a cargar. Solo "En vivo" trae lo último al entrar (sin pantalla de carga),
+   y el botón ↻ actualiza todo. */
+const VIS = {};
+let COB_SUCIO = false;
+const claveVista = v => ['cob','cfg','sol'].includes(v) ? 'g' : st.edif + '|' + (v === 'edi' ? '' : (m => m.y + '-' + m.m)(mesActual()));
 function irA(v, desdeAtras){
   if(!desdeAtras && v !== vistaActual) navPush({vista: vistaActual});
   vistaActual = v;
   for(const x of ['mov','gua','sol','bus','inf','edi','cfg','cob']) $('#v-' + x).hidden = x !== v;
-  const enMas = ['inf','bus','edi','cfg'].includes(v);
-  [...$('#bnav').children].forEach(b => b.classList.toggle('on', b.dataset.v === v || (enMas && b.dataset.v === 'mas')));
-  /* Cobros y Ajustes son de todos los edificios: sin selector arriba */
-  $('header .row').hidden = v === 'cob' || v === 'cfg';
+  [...$('#bnav').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $('#cfgBtn').classList.toggle('on', v === 'cfg' || v === 'edi');
+  /* Cobros, Peticiones y Ajustes son de todos los edificios: sin selector arriba */
+  $('header .row').hidden = v === 'cob' || v === 'cfg' || v === 'sol';
+  $('#hBus').hidden = ACC.modo === 'admin' || !['mov','gua','inf','bus'].includes(v);
+  $('#hQ').value = v === 'bus' ? BUS.q : '';
   $('#tabs').style.display = v === 'mov' ? '' : 'none';
   $('#online').style.display = v === 'mov' ? '' : 'none';
   $('#periodo').hidden = v !== 'mov';
-  $('#mesSel').hidden = !(v === 'gua' || v === 'sol' || v === 'inf' || v === 'bus');
+  $('#mesSel').hidden = !(v === 'gua' || v === 'inf' || v === 'bus');
   scrollTo({top:0});
-  if(v === 'mov') refrescar();
-  if(v === 'gua') cargarGuardias();
-  if(v === 'sol'){ pintarSolicitudes(); cargarSolicitudes(); }
+  if(v === 'mov'){ refrescar(); return; }
+  if(v === 'sol'){ pintarSolicitudes(); return; }
+  if(v === 'cob' && COB_SUCIO){ COB_SUCIO = false; VIS.cob = 'g'; Cobros.pintar($('#v-cob'), true); return; }
+  const k = claveVista(v);
+  if(VIS[v] === k && $('#v-' + v).innerHTML.trim()) return;
+  VIS[v] = k;
+  if(v === 'gua'){ if(GU.datos && GU.datos.ed === st.edif && GU.datos.mes.y === mesActual().y && GU.datos.mes.m === mesActual().m) pintarGuardias(); else cargarGuardias(); }
   if(v === 'inf') pintarInforme();
   if(v === 'edi') pintarEdificio();
   if(v === 'bus') pintarBuscar();
   if(v === 'cfg') pintarAjustes();
   if(v === 'cob') Cobros.pintar($('#v-cob'));
 }
-/* Menú "Más": Informe, Buscar, Edificio y Ajustes */
-function abrirMas(){
-  const op = [['inf','informe','Informe'], ['bus','buscar','Buscar'], ['edi','edificio','Edificio'], ['cfg','ajustes','Ajustes']];
-  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Más</h2>
-    <div class="menu">${op.map(([v, ic, t]) => `<button data-ir="${v}" class="${vistaActual === v ? 'on' : ''}"><span class="sic">${icono(ic, 20)}</span>${t}</button>`).join('')}</div>`;
-  $('#sheet').classList.add('on');
-}
-$('#panel').addEventListener('click', e => {
-  const b = e.target.closest('[data-ir]'); if(!b) return;
-  const v = b.dataset.ir;
-  if(v === vistaActual){ $('#sheet').classList.remove('on'); return; }
-  /* la entrada del historial del menú pasa a ser la de "volver a la vista anterior" */
-  const i = NAV.pila.lastIndexOf('sheet'); if(i >= 0) NAV.pila[i] = {vista: vistaActual};
-  NAV.desdeAtras = true; $('#sheet').classList.remove('on'); setTimeout(() => { NAV.desdeAtras = false; }, 0);
-  irA(v, i >= 0);
+$('#cfgBtn').innerHTML = icono('engranaje', 20);
+$('#cfgBtn').addEventListener('click', () => irA('cfg'));
+$('#hLupa').innerHTML = icono('buscar', 18);
+$('#hBus').addEventListener('submit', e => {
+  e.preventDefault();
+  BUS.q = $('#hQ').value.trim(); $('#hQ').blur();
+  if(vistaActual !== 'bus') irA('bus');
+  buscar();
 });
 function refrescarVista(){
-  if(vistaActual === 'mov') return refrescar(true);
-  if(vistaActual === 'gua') return Promise.all([cargarGuardias(), cargarSolicitudes()]);
-  if(vistaActual === 'sol') return cargarSolicitudes();
-  if(vistaActual === 'inf') return pintarInforme();
-  if(vistaActual === 'bus') return BUS.res.length ? buscar() : pintarBuscar();
-  if(vistaActual === 'cob') return Cobros.pintar($('#v-cob'), true);
-  if(vistaActual === 'edi'){
+  for(const k in VIS) delete VIS[k];
+  if(ACC.modo === 'admin') return refrescar(true);
+  const v = vistaActual, t = [refrescar(true), cargarSolicitudes(), cargarGuardias()];
+  VIS.gua = claveVista('gua');
+  if(v === 'cob'){ VIS.cob = 'g'; t.push(Cobros.pintar($('#v-cob'), true)); } else COB_SUCIO = true;
+  if(v === 'cfg'){ VIS.cfg = 'g'; t.push(pintarAjustes()); }
+  if(v === 'bus'){ VIS.bus = claveVista('bus'); if(BUS.res.length) t.push(buscar()); }
+  if(v === 'inf'){ VIS.inf = claveVista('inf'); }
+  if(v === 'edi'){
+    VIS.edi = claveVista('edi');
     /* con cambios sin guardar no se recarga (se perderían): se avisa */
-    if(ED.sucio[ED.sub]){ alert('Tienes cambios sin guardar en esta sección. Guárdalos antes de recargar.'); return; }
-    delete ED.datos[ED.sub]; return pintarEdificio();
+    if(ED.sucio[ED.sub]) alert('Tienes cambios sin guardar en esta sección. Guárdalos antes de recargar.');
+    else { delete ED.datos[ED.sub]; t.push(pintarEdificio()); }
   }
-  return pintarAjustes();
+  return Promise.all(t.map(p => Promise.resolve(p).catch(() => {})));
 }
-function alCambiarEdificio(){ GU.datos = null; BUS.res = []; BUS.sel = new Set(); if(vistaActual === 'bus') pintarBuscar(); ED.datos = {}; ED.sucio = {}; ED.cfg = null; if(vistaActual === 'edi') pintarEdificio(); if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'sol') pintarSolicitudes(); if(vistaActual === 'inf') pintarInforme(); }
-$('#bnav').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; if(b.dataset.v === 'mas') abrirMas(); else irA(b.dataset.v); });
-$('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.res = []; pintarBuscar(); } if(vistaActual === 'gua') cargarGuardias(); if(vistaActual === 'sol') pintarSolicitudes(); if(vistaActual === 'sol') pintarSolicitudes(); if(vistaActual === 'inf') pintarInforme(); });
+function alCambiarEdificio(){
+  BUS.res = []; BUS.sel = new Set(); ED.datos = {}; ED.sucio = {}; ED.cfg = null;
+  if(ACC.modo === 'admin') return;
+  /* Guardias se prepara por detrás para que al entrar ya esté */
+  VIS.gua = claveVista('gua'); cargarGuardias();
+  const v = vistaActual;
+  if(['bus','edi','inf'].includes(v)){ VIS[v] = claveVista(v); ({bus:pintarBuscar, edi:pintarEdificio, inf:pintarInforme})[v](); }
+}
+$('#bnav').addEventListener('click', e => { const b = e.target.closest('button'); if(b) irA(b.dataset.v); });
+$('#mesSel').addEventListener('change', () => {
+  const v = vistaActual;
+  if(v === 'bus'){ BUS.res = []; VIS.bus = claveVista('bus'); pintarBuscar(); }
+  if(v === 'gua' || v === 'bus' || v === 'inf'){ VIS.gua = claveVista('gua'); cargarGuardias(); }
+  if(v === 'inf'){ VIS.inf = claveVista('inf'); pintarInforme(); }
+});
 
 /* ---------- Arranque ---------- */
 (async function(){
@@ -4064,7 +4225,7 @@ $('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.r
     }
   } else {
     if(!(await accesoSupervision())) return;
-    $('#bnav').hidden = false;
+    $('#bnav').hidden = false; $('#cfgBtn').hidden = false; $('#hBus').hidden = false;
     try{ await cargarEdificios(); }
     catch(e){
       $('#dot').classList.add('off'); $('#liveTxt').textContent = 'Sin conexión';
@@ -4079,7 +4240,11 @@ $('#mesSel').addEventListener('change', () => { if(vistaActual === 'bus'){ BUS.r
   const vIni = new URLSearchParams(location.search).get('v');
   if(ACC.modo !== 'admin' && ['gua','sol','cob','inf','bus','edi','cfg'].includes(vIni)) irA(vIni, true);
   /* pedidos de adelanto / día libre: número en "Guardias" (solo supervisión) */
-  if(ACC.modo !== 'admin'){ cargarSolicitudes(); setInterval(() => { if(!document.hidden) cargarSolicitudes(); }, 120000); }
+  if(ACC.modo !== 'admin'){
+    cargarSolicitudes(); setInterval(() => { if(!document.hidden) cargarSolicitudes(); }, 120000);
+    /* Guardias se prepara por detrás: al tocarlo ya está listo */
+    if(!VIS.gua){ VIS.gua = claveVista('gua'); cargarGuardias(); }
+  }
   st.timer = setInterval(() => {
     if(document.hidden || vistaActual !== 'mov') return;
     if(ACC.modo === 'admin'){

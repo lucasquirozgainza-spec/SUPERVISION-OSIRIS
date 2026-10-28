@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Barra de estado OPACA: en iPhone la página empieza DEBAJO de la hora y la batería,
+     así nada queda bajo el difuminado de iOS (requiere volver a agregar el ícono) -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Osiris Guardia">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="osiris-icono-180.png">
 <meta name="theme-color" content="#496d7f">
 <title>Osiris Guardia</title>
 <style>
@@ -19,9 +23,10 @@
 }
 :root[data-theme="dark"]{ --bg:#0b1118; --card:#151d27; --ink:#e8edf3; --mute:#8b97a6; --line:#243042; --chip:#1c2633; --acc:#3b82f6; }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;overflow-x:hidden;overflow-x:clip}
 [hidden]{display:none !important}
 header{position:sticky;top:0;z-index:5;background:var(--marca);color:#fff;padding:calc(env(safe-area-inset-top) + 10px) 16px 12px}
+
 .top{display:flex;align-items:center;gap:10px}
 .top img{height:30px;width:auto}
 .tit{flex:1;min-width:0}
@@ -116,6 +121,18 @@ body.trabado{overflow:hidden;position:fixed;left:0;right:0}
 .cto.on{border-color:var(--ok);background:rgba(22,163,74,.08)}.cto.on i{border:7px solid var(--ok)}
 .ocrst details{margin-top:4px}.ocrst pre{white-space:pre-wrap;font-size:11px;background:var(--chip);padding:8px;border-radius:8px;max-height:200px;overflow:auto}
 #camFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+/* iPhone: con letra menor a 16 px, Safari hace zoom al tocar un campo */
+input,select,textarea{font-size:max(16px,1em)}
+/* iPhone: iOS difumina y bloquea una franja bajo la barra de estado (más alta
+   que la zona segura). Todo lo tocable va debajo y una franja opaca tapa esa zona.
+   Se calcula con la zona segura: en una pantalla sin barra (computadora) es 0. */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) * 1.7);background:var(--marca);z-index:9;pointer-events:none}
+header{padding-top:calc(env(safe-area-inset-top) * 1.7 + 10px)}
+.camTop{padding-top:calc(env(safe-area-inset-top) * 1.7 + 12px)}
+/* flecha del gesto "deslizar desde el borde para volver" (app en la pantalla de inicio) */
+.volverG{position:fixed;left:0;top:50%;z-index:70;width:44px;height:44px;margin-top:-22px;border-radius:50%;background:#fff;color:#111827;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;pointer-events:none;transform:translateX(-50px)}
+.volverG.listo{background:var(--marca);color:#fff}
 </style>
 </head>
 <body>
@@ -651,8 +668,25 @@ async function datos(clase){
 }
 
 /* ---------- Navegación ---------- */
-function ir(pantalla, ...args){ G.pila.push([pantalla, args]); pintar(); scrollTo({top:0}); }
-function volver(){ G.pila.pop(); if(!G.pila.length) G.pila.push([inicio, []]); pintar(); scrollTo({top:0}); }
+/* Cada pantalla deja una entrada en el historial: así el gesto de volver del
+   iPhone (deslizar desde el borde) y el botón atrás de Android regresan a la
+   pantalla anterior en vez de sacar al guardia de la app. */
+let HIST = 0;
+function ir(pantalla, ...args){
+  G.pila.push([pantalla, args]); pintar(); scrollTo({top:0});
+  try{ history.pushState({osiris: ++HIST}, ''); }catch(_){}
+}
+function quitarPantalla(){ G.pila.pop(); if(!G.pila.length) G.pila.push([inicio, []]); pintar(); scrollTo({top:0}); }
+function volver(){
+  if(HIST > 0){ try{ history.back(); return; }catch(_){} }
+  quitarPantalla();
+}
+let CAM_CERRAR = null; // cámara abierta: volver la cierra (no cambia de pantalla)
+window.addEventListener('popstate', () => {
+  if(CAM_CERRAR){ CAM_CERRAR(); try{ history.pushState({osiris: HIST}, ''); }catch(_){} return; }
+  HIST = Math.max(0, HIST - 1);
+  quitarPantalla();
+});
 function pintar(){
   const [fn, args] = G.pila[G.pila.length - 1];
   $('#atras').hidden = G.pila.length <= 1;
@@ -720,7 +754,8 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
       $('#camOk').hidden = max === 1 || fotos.length < Math.max(1, min);
       $('#camTh').innerHTML = fotos.map(b => `<img src="${verBlob(b)}" alt="">`).join('');
     };
-    const cerrar = () => { stream.getTracks().forEach(t => t.stop()); video.srcObject = null; cam.hidden = true; document.body.classList.remove('trabado'); listo(fotos); };
+    const cerrar = () => { CAM_CERRAR = null; stream.getTracks().forEach(t => t.stop()); video.srcObject = null; cam.hidden = true; document.body.classList.remove('trabado'); listo(fotos); };
+    CAM_CERRAR = cerrar;
     $('#camX').onclick = cerrar; $('#camOk').onclick = cerrar;
     $('#camDisp').onclick = async () => {
       const w = video.videoWidth, h = video.videoHeight; if(!w) return;
@@ -1334,6 +1369,28 @@ function pConsultas(tab){
       if(!l.length || !d || d.estado !== 'ok') location.reload();
     }catch(_){}
   }, 60000);
+})();
+
+/* ---------- Deslizar desde el borde izquierdo para volver ----------
+   En la app de la pantalla de inicio el iPhone no tiene gesto de volver: se hace
+   aquí. Aparece una flecha; al soltar con la flecha de color, vuelve (o cierra la
+   cámara). En la primera pantalla no hace nada: no saca de la app. */
+(function(){
+  const app = (navigator.standalone === true) || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if(!app) return;
+  const f = document.createElement('div'); f.className = 'volverG'; f.innerHTML = icono('atras', 22);
+  document.body.appendChild(f);
+  let x0 = null, y0 = 0, dx = 0;
+  const puede = () => CAM_CERRAR || G.pila.length > 1;
+  addEventListener('touchstart', e => { const t = e.touches[0]; if(e.touches.length === 1 && t.clientX < 24 && puede()){ x0 = t.clientX; y0 = t.clientY; dx = 0; } else x0 = null; }, {passive:true});
+  addEventListener('touchmove', e => {
+    if(x0 === null) return; const t = e.touches[0];
+    dx = t.clientX - x0; if(Math.abs(t.clientY - y0) > 60 && dx < 30){ x0 = null; f.style.opacity = 0; return; }
+    const p = Math.max(0, Math.min(dx, 120));
+    f.style.opacity = Math.min(1, p / 60); f.style.transform = 'translateX(' + (p * 0.6 - 50) + 'px)'; f.classList.toggle('listo', p >= 80);
+  }, {passive:true});
+  const fin = () => { if(x0 !== null && dx >= 80){ if(CAM_CERRAR) CAM_CERRAR(); else volver(); } x0 = null; f.style.opacity = 0; f.style.transform = ''; f.classList.remove('listo'); };
+  addEventListener('touchend', fin, {passive:true}); addEventListener('touchcancel', () => { dx = 0; fin(); }, {passive:true});
 })();
 
 </script>
