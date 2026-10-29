@@ -618,17 +618,19 @@ main{padding-top:var(--s5)}
 :root{
   --g1:#526a6c; --g2:#9f0500;
   --grad:linear-gradient(135deg, var(--g1) 0%, #6f4a45 52%, var(--g2) 100%);
+  --grad-h:linear-gradient(90deg, var(--g1) 0%, #6f4a45 52%, var(--g2) 100%);
   --acc:#3F5759; --acc-ink:#FFFFFF; --acc-suave:rgba(82,106,108,.13);
   --bg:#F3F4F5; --ink:#121516; --mute:#5E6668; --line:#E2E5E6; --chip:#EEF0F1;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --acc:#A9C4C6; --acc-ink:#0C0E10; --acc-suave:rgba(169,196,198,.14); --bg:#0D0F10; --card:#16191A; --chip:#1E2223; --line:#2A2F30; --ink:#ECEFEF; --mute:#9DA6A8;
-  --grad:linear-gradient(135deg, #3c4f51 0%, #4f2f2b 52%, #6e0400 100%); } }
+  --grad:linear-gradient(135deg, #3c4f51 0%, #4f2f2b 52%, #6e0400 100%); --grad-h:linear-gradient(90deg, #3c4f51 0%, #4f2f2b 52%, #6e0400 100%); } }
 :root[data-theme="dark"]{ --acc:#A9C4C6; --acc-ink:#0C0E10; --acc-suave:rgba(169,196,198,.14); --bg:#0D0F10; --card:#16191A; --chip:#1E2223; --line:#2A2F30; --ink:#ECEFEF; --mute:#9DA6A8;
-  --grad:linear-gradient(135deg, #3c4f51 0%, #4f2f2b 52%, #6e0400 100%); }
+  --grad:linear-gradient(135deg, #3c4f51 0%, #4f2f2b 52%, #6e0400 100%); --grad-h:linear-gradient(90deg, #3c4f51 0%, #4f2f2b 52%, #6e0400 100%); }
 
-/* encabezado con degradado y curva (en el celular se desplaza con la página: deja más espacio a los datos) */
-body::before{background:var(--g1)}
-header{position:relative;background:var(--grad);color:#fff;border:0;border-radius:0 0 26px 26px;padding-bottom:var(--s5);box-shadow:0 8px 24px rgba(60,40,40,.18)}
+/* encabezado con degradado y curva (en el celular se desplaza con la página: deja más espacio a los datos).
+   El degradado va de izquierda a derecha para que la franja de la hora del iPhone empalme sin corte. */
+body::before{background:var(--grad-h)}
+header{position:relative;background:var(--grad-h);color:#fff;border:0;border-radius:0 0 26px 26px;padding-bottom:var(--s5);box-shadow:0 8px 24px rgba(60,40,40,.18)}
 .hlogo{filter:brightness(0) invert(1);opacity:.95}
 #hTit{color:#fff}
 .brand small{color:rgba(255,255,255,.78)}
@@ -848,7 +850,64 @@ function leer(k){ try{ return localStorage.getItem('osiris_'+k); }catch(e){ retu
 /* Con señal mala una consulta podía quedar colgada para siempre (y el botón de
    recargar no terminaba nunca): se corta a los 20 s. */
 function conTope(ms){ const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return {signal:c.signal, fin:() => clearTimeout(t)}; }
+/* ---------- Caché de lecturas ----------
+   Cada lectura se guarda en este celular (solo supervisión). Al abrir la app o una
+   sección se pinta al instante con lo guardado y por detrás se pide lo nuevo.
+   La clave ignora la hora exacta de las fechas (solo el día), así coincide entre aperturas. */
+const CACHE = {mem:new Map(), pref:'osiris_c1:', idx:'osiris_c1_idx', tope:3.2e6};
+let SOLO_CACHE = false;
+const claveCache = p => p.replace(/(\d{4}-\d{2}-\d{2})T[\d%A.:]+Z/g, '$1');
+function cachePermitido(p){
+  let modo = 'sup'; try{ modo = ACC.modo; }catch(_){}
+  return modo !== 'admin' && !/order=id\.desc&limit=1$/.test(p) && (!p.includes('__monitor__') || p.includes('cob_'));
+}
+function leerCache(p){
+  const k = claveCache(p);
+  if(CACHE.mem.has(k)) return CACHE.mem.get(k);
+  try{ const s = localStorage.getItem(CACHE.pref + k); if(!s) return null; const d = JSON.parse(s); CACHE.mem.set(k, d); return d; }catch(_){ return null; }
+}
+function guardarCache(p, datos){
+  if(!cachePermitido(p)) return;
+  const k = claveCache(p); CACHE.mem.set(k, datos);
+  let idx = {}; try{ idx = JSON.parse(localStorage.getItem(CACHE.idx) || '{}'); }catch(_){}
+  let txt; try{ txt = JSON.stringify(datos); }catch(_){ return; }
+  idx[k] = [Date.now(), txt.length];
+  /* si se pasa del tope, se borra lo más viejo */
+  let total = Object.values(idx).reduce((a, x) => a + x[1], 0);
+  for(const [kk] of Object.entries(idx).sort((a, b) => a[1][0] - b[1][0])){
+    if(total <= CACHE.tope || kk === k) continue;
+    total -= idx[kk][1]; delete idx[kk]; try{ localStorage.removeItem(CACHE.pref + kk); }catch(_){}
+  }
+  for(let i = 0; i < 3; i++){
+    try{ localStorage.setItem(CACHE.pref + k, txt); localStorage.setItem(CACHE.idx, JSON.stringify(idx)); return; }
+    catch(_){ /* sin espacio: se libera lo más viejo y se reintenta */
+      const viejos = Object.entries(idx).filter(([kk]) => kk !== k).sort((a, b) => a[1][0] - b[1][0]).slice(0, 5);
+      if(!viejos.length) return;
+      for(const [kk] of viejos){ delete idx[kk]; try{ localStorage.removeItem(CACHE.pref + kk); }catch(_){} }
+    }
+  }
+}
+function borrarCache(){
+  CACHE.mem.clear();
+  try{ Object.keys(localStorage).filter(k => k.startsWith(CACHE.pref) || k === CACHE.idx).forEach(k => localStorage.removeItem(k)); }catch(_){}
+}
+/* Ejecuta fn leyendo SOLO del caché (sin red). Todo ocurre en microtareas, así ninguna
+   otra lectura se mezcla en este modo. Si falta algo, falla y se sigue con la red. */
+async function deCache(fn){
+  SOLO_CACHE = true;
+  const t = setTimeout(() => { SOLO_CACHE = false; }, 0);   // seguro: nunca queda activo más allá de esta vuelta
+  try{ return await fn(); } finally { SOLO_CACHE = false; clearTimeout(t); }
+}
 async function api(path){
+  if(SOLO_CACHE){ const c = leerCache(path); if(c) return JSON.parse(JSON.stringify(c)); throw new Error('sin caché'); }
+  const r = await apiRed(path);
+  guardarCache(path, r);
+  return r;
+}
+/* Novedades: el id del último evento subido. Solo si cambió se vuelve a pedir todo. */
+const NUBE = {id:null};
+async function ultimoId(){ const r = await apiRed('eventos?select=id&order=id.desc&limit=1'); return r.length ? r[0].id : 0; }
+async function apiRed(path){
   const tp = conTope(20000);
   let r;
   try{ r = await fetch(SB_URL + '/rest/v1/' + path, {headers:{apikey:SB_KEY, Accept:'application/json'}, cache:'no-store', signal:tp.signal}); }
@@ -1034,9 +1093,20 @@ function mostrarMovGuardado(){
   if(c){ st.datos = c.datos; st.hayMas = c.hayMas; st.conteos = c.conteos; pintarTabs(); pintarLista(); return true; }
   $('#list').innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; return false;
 }
+/* Al abrir: lo último guardado en el celular, sin esperar a la red */
+async function pintarMovDeCache(){
+  if(!st.edif) return false;
+  try{
+    const [ev, cont, pres, tur] = await deCache(() => Promise.all([cargarEventos(limite), cargarConteos(), cargarPresencia(), cargarTurnos()]));
+    st.datos = ev.datos; st.hayMas = ev.hayMas; st.conteos = cont;
+    pintarPresencia(pres, tur); pintarTabs(); pintarLista();
+    return true;
+  }catch(_){ return false; }
+}
 async function refrescar(manual){
   if(!st.edif) return;
   const mio = ++gen;          // si cambian edificio/pestaña a mitad de carga, se descarta la respuesta vieja
+  const tokenAntes = NUBE.id;
   st.cargando = true;
   try{
     const edif = st.edif, sec = st.sec;
@@ -1046,7 +1116,7 @@ async function refrescar(manual){
     MOVC[claveMov()] = {datos: ev.datos, hayMas: ev.hayMas, conteos: cont};
     pintarPresencia(pres, tur); pintarTabs(); pintarLista();
     $('#dot').classList.remove('off'); $('#liveTxt').textContent = 'En vivo';
-    st.actualizado = new Date();
+    st.actualizado = new Date(); st.token = tokenAntes;
     if(typeof subtituloVista === 'function') subtituloVista(); else $('#upd').textContent = st.edif;
   }catch(e){
     $('#dot').classList.add('off'); $('#liveTxt').textContent = 'Sin conexión';
@@ -1233,7 +1303,7 @@ $('#sheet').addEventListener('click', ev => {
   else if(ev.target.dataset.src) verFoto(ev.target.dataset.src);
 });
 $('#lb').addEventListener('click', ev => { if(ev.target.id !== 'lbdl') $('#lb').classList.remove('on'); });
-document.addEventListener('visibilitychange', () => { if(!document.hidden && vistaActual === 'mov') refrescar(); });
+document.addEventListener('visibilitychange', () => { let adm = false; try{ adm = ACC.modo === 'admin'; }catch(_){} if(!document.hidden && vistaActual === 'mov' && adm) refrescar(); });
 let vistaActual = 'mov';
 
 
@@ -1692,12 +1762,22 @@ async function horasDelMes(ed, y, m, registro, cfg){
 async function cargarGuardias(){
   const box = $('#v-gua'); if(!st.edif){ box.innerHTML = '<div class="empty">Elige un edificio.</div>'; return; }
   const mio = ++GU.gen, ed = st.edif, mes = mesActual();
-  if(!GU.datos || GU.datos.ed !== ed) box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
-  try{
+  const calcular = async () => {
     const [registro, cfg] = await Promise.all([leerRegistro(ed), leerConfig(ed)]);
     const horas = await horasDelMes(ed, mes.y, mes.m, registro, cfg);
+    return {ed, mes, registro, cfg, horas};
+  };
+  const mismo = GU.datos && GU.datos.ed === ed && GU.datos.mes.y === mes.y && GU.datos.mes.m === mes.m;
+  if(!mismo){
+    /* primero lo guardado en el celular (al instante); la carga solo si no hay nada */
+    try{ const d = await deCache(calcular); if(mio === GU.gen){ GU.datos = d; pintarGuardias(); } }
+    catch(_){ if(!GU.datos || GU.datos.ed !== ed) box.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>'; }
+  }
+  const token = NUBE.id;
+  try{
+    const d = await calcular();
     if(mio !== GU.gen) return;
-    GU.datos = {ed, mes, registro, cfg, horas};
+    GU.datos = d; GU.token = token;
     pintarGuardias();
   }catch(e){
     if(mio !== GU.gen) return;
@@ -2116,6 +2196,7 @@ function pintarAvisoSol(){
 
 async function cargarSolicitudes(){
   const mio = ++SOL.gen;
+  if(!SOL.cargado){ try{ const l = await deCache(leerSolicitudes); if(mio === SOL.gen){ SOL.lista = l; SOL.cargado = true; pintarAvisoSol(); if(typeof vistaActual !== 'undefined' && vistaActual === 'sol') pintarSolicitudes(); } }catch(_){} }
   try{
     const l = await leerSolicitudes();
     if(mio !== SOL.gen) return;
@@ -2504,16 +2585,29 @@ const Cobros = (() => {
   const nombreRecibo = r => `Recibo ${num4(r.numero)} - ${(r.cliente && r.cliente.nombre) || ''}.pdf`;
 
   /* ---------- pantalla principal ---------- */
+  /* por detrás, al abrir la app o cuando hay novedades en la nube: Cobros ya está listo al tocarlo */
+  async function precargar(){
+    if(!C.cargado){ try{ await deCache(cargar); }catch(_){} }
+    const token = NUBE.id;
+    try{ await cargar(); C.token = token; }catch(_){ return; }
+    if(C.caja && C.caja.isConnected && !C.caja.closest('[hidden]') && C.sub !== 'empresa') pintar(C.caja);
+  }
   async function pintar(caja, recargar){
     C.caja = caja;
-    if(!C.cargado || recargar){
-      if(!C.cargado) caja.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
-      try{ await cargar(); }catch(e){
-        if(!C.cargado){ caja.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
-        avisoBreve('No se pudo actualizar Cobros. Se muestran los últimos datos.', () => pintar(caja, true));
-      }
-      pdfListo();
+    if(!C.cargado){ try{ await deCache(cargar); }catch(_){} }
+    if(!C.cargado){
+      caja.innerHTML = '<div class="carga" role="status" aria-label="Cargando"></div>';
+      const token = NUBE.id;
+      try{ await cargar(); C.token = token; }catch(e){ caja.innerHTML = `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
+    } else if(recargar){
+      /* se muestra lo que ya hay y se actualiza por detrás */
+      pintar(caja);
+      const token = NUBE.id;
+      try{ await cargar(); C.token = token; }catch(e){ avisoBreve('No se pudo actualizar Cobros. Se muestran los últimos datos.', () => pintar(caja, true)); return; }
+      if(caja.isConnected && C.sub !== 'empresa') pintar(caja);
+      return;
     }
+    pdfListo();
     const subs = [['notas','Notas'], ['recibos','Recibos'], ['clientes','Clientes'], ['empresa','Empresa']];
     caja.innerHTML = `<div class="segm" id="cSeg">${subs.map(([k, t]) => `<button data-csub="${k}" class="${C.sub === k ? 'on' : ''}">${t}</button>`).join('')}</div><div id="cCuerpo"></div>`;
     caja.querySelector('#cSeg').onclick = e => { const b = e.target.closest('[data-csub]'); if(b){ C.sub = b.dataset.csub; pintar(caja); } };
@@ -2858,7 +2952,7 @@ const Cobros = (() => {
     };
   }
 
-  return {pintar, letras};
+  return {pintar, letras, precargar, vigente: () => C.cargado && C.token === NUBE.id};
 })();
 
 /* ===================== INFORME MENSUAL EN PDF (solo supervisión) ===================== */
@@ -3964,6 +4058,13 @@ function quitarBloqueo(){ $('#lock').hidden = true; }
 
 /* Supervisión: pide el PIN una vez por celular (o lo crea la primera vez) */
 async function accesoSupervision(){
+  /* este celular ya entró antes: se abre al instante y el PIN se confirma por detrás
+     (si lo cambiaron en otro lado, se cierra la sesión y se borra lo guardado) */
+  const previo = leer('sup');
+  if(previo){
+    leerPin().then(pin => { ACC.pin = pin; if(pin && pin.hash !== previo){ guardar('sup', ''); borrarCache(); location.reload(); } }).catch(() => {});
+    return true;
+  }
   let pin;
   try{ pin = await leerPin(); }
   catch(e){
@@ -4264,7 +4365,7 @@ $('#v-cfg').addEventListener('click', async ev => {
     }catch(e){ $('#gMsg').innerHTML = `<div class="msg bad">No se pudo crear (${esc(e.message)}).</div>`; t.disabled = false; }
     return;
   }
-  if(t.id === 'cSalir'){ guardar('sup', ''); location.reload(); return; }
+  if(t.id === 'cSalir'){ guardar('sup', ''); borrarCache(); location.reload(); return; }
   if(t.id === 'cPin'){
     const a = prompt('PIN nuevo (4 a 8 números):'); if(a === null) return;
     if(!/^\d{4,8}$/.test(a.trim())) return alert('El PIN debe tener de 4 a 8 números.');
@@ -4418,9 +4519,10 @@ function irA(v, desdeAtras){
   $('#periodo').hidden = v !== 'mov';
   $('#mesSel').hidden = !(v === 'gua' || v === 'inf' || v === 'bus');
   scrollTo({top:0});
-  if(v === 'mov'){ refrescar(); return; }
+  if(v === 'mov'){ if(st.token !== NUBE.id || Date.now() - (st.actualizado || 0) > 120000) refrescar(); return; }
   if(v === 'sol'){ pintarSolicitudes(); return; }
-  if(v === 'cob' && COB_SUCIO){ COB_SUCIO = false; VIS.cob = 'g'; Cobros.pintar($('#v-cob'), true); return; }
+  if(v === 'cob' && (COB_SUCIO || !Cobros.vigente())){ COB_SUCIO = false; VIS.cob = 'g'; Cobros.pintar($('#v-cob'), true); return; }
+  if(v === 'gua' && GU.token !== NUBE.id){ VIS.gua = claveVista('gua'); if(GU.datos && $('#v-gua').innerHTML.trim()) pintarGuardias(); cargarGuardias(); return; }
   const k = claveVista(v);
   if(VIS[v] === k && $('#v-' + v).innerHTML.trim()) return;
   VIS[v] = k;
@@ -4449,6 +4551,15 @@ $('#hBus').addEventListener('submit', e => {
   if(vistaActual !== 'bus') irA('bus');
   buscar();
 });
+/* Llegó algo nuevo a la nube: se actualiza por detrás lo que se ve y lo que tiene número */
+function hayNovedades(){
+  cargarSolicitudes();
+  const v = vistaActual;
+  if(v === 'mov') refrescar();
+  if(v === 'gua') cargarGuardias();
+  if(v === 'cob') Cobros.pintar($('#v-cob'), true);
+  else if(v !== 'edi' && v !== 'cfg') Cobros.precargar();
+}
 function refrescarVista(){
   for(const k in VIS) delete VIS[k];
   if(ACC.modo === 'admin') return refrescar(true);
@@ -4515,7 +4626,10 @@ $('#mesSel').addEventListener('change', () => {
     if(!(await accesoSupervision())) return;
     $('#bnav').hidden = false; $('#cfgBtn').hidden = false; $('#hBus').hidden = false;
     splashTxt('Conectando con la nube');
-    try{ await cargarEdificios(); }
+    let conCache = false;
+    try{ await deCache(cargarEdificios); conCache = !!st.edif; }catch(_){}
+    if(conCache) cargarEdificios().catch(() => {});   // la lista se actualiza por detrás
+    else try{ await cargarEdificios(); }
     catch(e){
       $('#dot').classList.add('off'); $('#liveTxt').textContent = 'Sin conexión';
       $('#list').innerHTML = `<div class="err">No se pudo conectar con la nube (${esc(e.message)}).<br>Toca ↻ para reintentar.</div>`;
@@ -4524,19 +4638,35 @@ $('#mesSel').addEventListener('change', () => {
     }
   }
   splashTxt('Cargando movimientos');
-  await refrescar();
-  ocultarSplash();
+  NUBE.id = await ultimoId().catch(() => null);
+  if(await pintarMovDeCache()){ ocultarSplash(); refrescar(); }
+  else { await refrescar(); ocultarSplash(); }
   /* abrir directo en una sección (ej. ?v=cob para Cobros) */
   const vIni = new URLSearchParams(location.search).get('v');
   if(ACC.modo !== 'admin' && ['gua','sol','cob','inf','bus','edi','cfg'].includes(vIni)) irA(vIni, true);
   /* pedidos de adelanto / día libre: número en "Guardias" (solo supervisión) */
   if(ACC.modo !== 'admin'){
-    cargarSolicitudes(); setInterval(() => { if(!document.hidden) cargarSolicitudes(); }, 120000);
-    /* Guardias se prepara por detrás: al tocarlo ya está listo */
+    cargarSolicitudes();
+    /* Guardias y Cobros se preparan por detrás: al tocarlos ya están listos */
     if(!VIS.gua){ VIS.gua = claveVista('gua'); cargarGuardias(); }
+    Cobros.precargar();
+    /* cada 15 s se mira solo si subió algo nuevo a la nube (una consulta mínima);
+       recién entonces se actualiza lo que se está viendo */
+    setInterval(async () => {
+      if(document.hidden) return;
+      let id; try{ id = await ultimoId(); }catch(_){ return; }
+      if(id !== NUBE.id){ NUBE.id = id; hayNovedades(); }
+      else if(vistaActual === 'mov' && Date.now() - (st.actualizado || 0) > 120000) refrescar();   // "hace X min" al día
+    }, 15000);
+    document.addEventListener('visibilitychange', async () => {
+      if(document.hidden) return;
+      let id; try{ id = await ultimoId(); }catch(_){ return; }
+      if(id !== NUBE.id){ NUBE.id = id; hayNovedades(); }
+    });
   }
   st.timer = setInterval(() => {
     if(document.hidden || vistaActual !== 'mov') return;
+    if(ACC.modo !== 'admin') return;   // supervisión: lo maneja el aviso de novedades
     if(ACC.modo === 'admin'){
       /* si desactivan el link, deja de mostrar datos */
       Promise.all([leerLink(token), dispositivosLink(token)]).then(([d, devs]) => {
