@@ -109,6 +109,27 @@ async function revisarEdificio(ed, m, enviados, conRondas){
 }
 
 /* Pedidos de adelanto / día libre y montos de adelanto (últimos 2 días) */
+/* Los franqueros NO pueden pedir adelantos ni días libres: su pedido se rechaza
+   solo (al guardia le llega "no aprobado" en la app) y a supervisión no le llega nada. */
+const MOTIVO_FRANQ = 'Los franqueros no pueden pedir adelantos ni días libres.';
+const limpiarCi = v => String(v ?? '').trim().replace(/\s+/g, '').toUpperCase();   // igual que el monitor
+async function franqueros(){
+  const r = await api(`eventos?select=guardia,detalle,created_at&tipo=eq.Guardia&order=created_at.desc&limit=5000`);
+  const ci = new Map(), nom = new Map();
+  for(const e of r){
+    const d = det(e), turno = String(d.turno || '').toUpperCase(), c = limpiarCi(d.ci), n = String(d.nombre || e.guardia || '').trim().toLowerCase();
+    if(c && !ci.has(c)) ci.set(c, turno === 'FRANQUERO');
+    if(n && !nom.has(n)) nom.set(n, turno === 'FRANQUERO');
+  }
+  return e => { const d = det(e), c = limpiarCi(d.guard_ci); return c && ci.has(c) ? ci.get(c) : nom.get(String(e.guardia || '').trim().toLowerCase()) === true; };
+}
+async function rechazarFranquero(e){
+  if(PRUEBA){ console.log('RECHAZO AUTOMÁTICO >', e.guardia, det(e).clase, det(e).sid); return; }
+  const d = det(e), uid = 'alertas_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  await fetch(`${SB}/rest/v1/eventos`, {method: 'POST', headers: {...H, Prefer: 'return=minimal'},
+    body: JSON.stringify({tipo: 'Respuesta', edificio: e.edificio, guardia: 'Supervisión', device_id: 'alertas',
+      detalle: {sid: String(d.sid), estado: 'rechazado', clase: d.clase, guardia: e.guardia, ci: d.guard_ci || '', fecha: d.fecha || '', motivo: MOTIVO_FRANQ, auto: true, uid, ts: new Date().toISOString()}})});
+}
 async function revisarSolicitudes(enviados){
   const desde = new Date(AHORA - 2 * 864e5).toISOString();
   const ev = await api(`eventos?select=created_at,edificio,guardia,detalle&tipo=eq.Solicitud&created_at=gte.${enc(desde)}&order=created_at.asc&limit=500`);
@@ -116,21 +137,29 @@ async function revisarSolicitudes(enviados){
   const todos = await api(`eventos?select=edificio,guardia,detalle&tipo=eq.Solicitud&created_at=gte.${enc(new Date(AHORA - 120 * 864e5).toISOString())}&limit=3000`);
   for(const e of todos){ const d = det(e); if(d.sid && (d.clase === 'adelanto' || d.clase === 'libre')) pedidos.set(String(d.sid), e); }
   const fechaTxt = ymd => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (ymd || ''); };
+  const esFranq = await franqueros();
+  const resp = await api(`eventos?select=detalle&tipo=eq.Respuesta&created_at=gte.${enc(desde)}&limit=2000`);
+  const respondidos = new Set(resp.map(r => String(det(r).sid || '')));
   const out = [];
   for(const e of ev){
     const d = det(e), sid = String(d.sid || ''); if(!sid) continue;
+    const pedido = d.clase === 'monto' ? pedidos.get(sid) : e;
+    if(pedido && esFranq(pedido)){
+      if((d.clase === 'adelanto' || d.clase === 'libre') && !respondidos.has(sid)){ try{ await rechazarFranquero(e); respondidos.add(sid); }catch(x){ console.error('rechazo', x.message); } }
+      continue;   // a supervisión no le llega nada
+    }
     const quien = e.guardia || 'Un guardia', ed = e.edificio + (d.bloque ? ' · ' + d.bloque : '');
     const motivo = d.motivo ? ` Motivo: ${d.motivo}.` : '';
     if(d.clase === 'adelanto'){
       const clave = 'sol|' + sid; if(enviados.has(clave)) continue;
-      out.push({clave, asunto: `Osiris · ${quien} pide un adelanto`, texto: `${quien} (${ed}) pidió un adelanto a las ${hhmm(hora(e))}.${motivo} Apruébalo o recházalo en el monitor (Guardias).`});
+      out.push({clave, asunto: `Osiris · ${quien} pide un adelanto`, texto: `${quien} (${ed}) pidió un adelanto a las ${hhmm(hora(e))}${d.fecha ? ' para el ' + fechaTxt(d.fecha) : ''}.${motivo} Apruébalo o recházalo en el monitor (Peticiones).`});
     } else if(d.clase === 'libre'){
       const clave = 'sol|' + sid; if(enviados.has(clave)) continue;
-      out.push({clave, asunto: `Osiris · ${quien} pide día libre`, texto: `${quien} (${ed}) pidió día libre para el ${fechaTxt(d.fecha)}.${motivo} Apruébalo o recházalo en el monitor (Guardias).`});
+      out.push({clave, asunto: `Osiris · ${quien} pide día libre`, texto: `${quien} (${ed}) pidió día libre para el ${fechaTxt(d.fecha)}.${motivo} Apruébalo o recházalo en el monitor (Peticiones).`});
     } else if(d.clase === 'monto'){
       const clave = 'monto|' + sid + '|' + d.monto; if(enviados.has(clave)) continue;
       const p = pedidos.get(sid); const q = p ? (p.guardia || quien) : quien;
-      out.push({clave, asunto: `Osiris · ${q} recibió Bs ${d.monto} de adelanto`, texto: `${q} (${ed}) escribió que recibió Bs ${d.monto} de adelanto. Confírmalo en el monitor (Guardias) si es lo que le diste.`});
+      out.push({clave, asunto: `Osiris · ${q} recibió Bs ${d.monto} de adelanto`, texto: `${q} (${ed}) escribió que recibió Bs ${d.monto} de adelanto. Confírmalo en el monitor (Peticiones) si es lo que le diste.`});
     }
   }
   return out;

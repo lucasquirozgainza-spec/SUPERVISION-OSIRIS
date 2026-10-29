@@ -461,6 +461,8 @@ details.info.tip > summary{width:auto;padding:4px 12px 4px 8px;gap:6px;font-size
 .scuenta{font-size:12.5px;color:var(--mute);font-weight:600;margin-right:4px}
 .isec.apag .t{opacity:.5}
 #iGen{display:flex;align-items:center;justify-content:center;gap:8px}
+.kv span:last-child{white-space:pre-line}
+.evs .l2{white-space:normal}
 /* peticiones */
 #v-sol .segm + .shead{margin-top:0}
 .slista .srow{padding:var(--s4);border-top:1px solid var(--line)}
@@ -1005,7 +1007,7 @@ async function cargarEdificios(){
 }
 
 async function cargarConteos(){
-  const base = 'eventos?select=tipo,detalle->>ts,created_at&' + filtrosBase() + '&tipo=' + enc(inList(OPERATIVOS)) + '&order=created_at.desc';
+  const base = 'eventos?select=tipo,guardia,detalle->>ts,detalle->>turno_ref,detalle->>guard_ci,created_at&' + filtrosBase() + '&tipo=' + enc(inList(OPERATIVOS)) + '&order=created_at.desc';
   const rows = [];
   for(let off = 0; off < 20000; off += 1000){
     const pg = await api(base + '&limit=1000&offset=' + off);
@@ -1013,9 +1015,10 @@ async function cargarConteos(){
     if(pg.length < 1000) break;
   }
   const r = rango();
-  const c = {}; let total = 0;
+  const c = {}; let total = 0, dobles = new Set();
   for(const x of rows){
     let t = fecha(x.ts); if(isNaN(t)) t = fecha(x.created_at);
+    if(x.tipo === 'Doblar turno'){ const k = x.turno_ref ? 'r:' + x.turno_ref : 'g:' + (x.guard_ci || x.guardia) + '|' + t.toDateString(); if(dobles.has(k)) continue; dobles.add(k); }
     if(!(t >= r.desde && (!r.hasta || t < r.hasta))) continue;
     c[x.tipo] = (c[x.tipo]||0) + 1; total++;
   }
@@ -1030,8 +1033,27 @@ async function cargarEventos(limite){
   const rows = await api('eventos?select=id,created_at,tipo,edificio,guardia,detalle&' + filtrosBase()
     + '&tipo=' + enc(inList(tipos)) + '&order=created_at.desc&limit=' + limite);
   await unirFotosTurno(rows);
+  unirDobles(rows);
   return {hayMas: rows.length >= limite && limite < 1000,
           datos: rows.filter(enRango).sort((a,b) => horaReal(b) - horaReal(a))};
+}
+/* "Doblar turno" marcado varias veces en el MISMO turno (24 → 12 → 24…): vale el último.
+   En la lista queda solo ese, con cuántas veces se cambió y el historial en el detalle. */
+const claveDoble = e => { const d = detalleDe(e); return d.turno_ref ? 'r:' + d.turno_ref : 'g:' + (d.guard_ci || e.guardia) + '|' + horaReal(e).toDateString(); };
+function unirDobles(rows){
+  const grupos = new Map();
+  for(const e of rows) if(e.tipo === 'Doblar turno'){ const k = claveDoble(e); if(!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(e); }
+  const quitar = new Set();
+  for(const g of grupos.values()){
+    if(g.length < 2) continue;
+    g.sort((a, b) => horaReal(a) - horaReal(b));
+    const ult = g[g.length - 1];
+    if(typeof ult.detalle !== 'object' || !ult.detalle) ult.detalle = detalleDe(ult);
+    ult.detalle._cambios = g.map(x => ({t: horaReal(x).toISOString(), nivel: detalleDe(x).nivel || 12}));
+    g.slice(0, -1).forEach(x => quitar.add(x));
+  }
+  if(quitar.size){ const q = rows.filter(e => !quitar.has(e)); rows.length = 0; rows.push(...q); }
+  return rows;
 }
 /* Fotos de ingreso/salida de turno: la app las sube aparte ('Foto de turno') y se unen por turno_ref */
 async function unirFotosTurno(rows){
@@ -1181,7 +1203,10 @@ function subtitulo(e, d){
   const p = [];
   if(e.guardia) p.push(e.guardia);
   const b = d.bloque || d.torre; if(b) p.push(valorTxt(b));
-  if(d.nivel && String(d.nivel) !== '12') p.push('Turno de ' + valorTxt(d.nivel) + ' h');
+  if(e.tipo === 'Doblar turno'){
+    p.push(String(d.nivel || 12) === '12' ? 'Volvió a turno normal (12 h)' : 'Turno de ' + valorTxt(d.nivel) + ' h');
+    if(Array.isArray(d._cambios) && d._cambios.length > 1) p.push('cambiado ' + d._cambios.length + ' veces');
+  } else if(d.nivel && String(d.nivel) !== '12') p.push('Turno de ' + valorTxt(d.nivel) + ' h');
   return p.join(' · ');
 }
 
@@ -1256,6 +1281,7 @@ function abrirDetalle(e){
   const filas = [['Guardia', e.guardia], ['Hora', t.toLocaleString('es',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})]];
   if(d.ts && Math.abs(fecha(e.created_at) - t) > 5*60e3)
     filas.push(['Subido a la nube', fecha(e.created_at).toLocaleString('es',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false})]);
+  if(Array.isArray(d._cambios)) filas.push(['Cambios del turno', d._cambios.map(c => { const x = new Date(c.t); return x.toLocaleDateString('es',{day:'2-digit',month:'2-digit'}) + ' ' + hm(x) + ': ' + c.nivel + ' h'; }).join('\n') + '\nVale el último.']);
   for(const [k,v] of camposVisibles(d)) filas.push([ETIQUETAS[k] || (k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g,' ')), valorTxt(v)]);
   const g = (d.ubicacion && typeof d.ubicacion === 'object') ? d.ubicacion : d;
   if(g.lat && g.lng) filas.push(['Mapa', `<a href="https://maps.apple.com/?q=${enc(g.lat+','+g.lng)}" target="_blank" rel="noopener">Ver ubicación</a>`]);
@@ -2157,6 +2183,30 @@ const SOL_DIAS = 120;
 function bsTxt(v){ const n = +v; if(!isFinite(n)) return '-'; return 'Bs ' + (Number.isInteger(n) ? n : n.toFixed(2)); }
 function diaLibreTxt(ymd){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); if(!m) return ymd || ''; return new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString('es',{weekday:'long',day:'2-digit',month:'long'}); }
 
+/* Los franqueros NO pueden pedir adelantos ni días libres: su pedido no aparece aquí
+   y se rechaza solo (al guardia le llega "no aprobado" en la app). */
+const MOTIVO_FRANQ = 'Los franqueros no pueden pedir adelantos ni días libres.';
+async function franquerosTodos(){
+  const r = await paginas('eventos?select=guardia,detalle,created_at&tipo=eq.Guardia&order=created_at.desc');
+  const ci = new Map(), nom = new Map();
+  for(const e of r){
+    const d = detalleDe(e), turno = String(d.turno || '').toUpperCase(), c = limpiarCi(d.ci), n = String(d.nombre || e.guardia || '').trim().toLowerCase();
+    if(c && !ci.has(c)) ci.set(c, turno === 'FRANQUERO');
+    if(n && !nom.has(n)) nom.set(n, turno === 'FRANQUERO');
+  }
+  return x => { const c = limpiarCi(x.ci); return c && ci.has(c) ? ci.get(c) : nom.get(String(x.guardia || '').trim().toLowerCase()) === true; };
+}
+const SOL_AUTO = new Set();
+function rechazarFranqueros(lista){
+  let modo = 'sup'; try{ modo = ACC.modo; }catch(_){}
+  if(modo === 'admin') return;
+  for(const x of lista){
+    if(x.estado !== 'pendiente' || SOL_AUTO.has(x.sid)) continue;
+    SOL_AUTO.add(x.sid);
+    apiEscribir('POST', 'eventos', nuevoEvento('Respuesta', x.ed, 'Supervisión',
+      {sid:x.sid, estado:'rechazado', clase:x.clase, guardia:x.guardia, ci:x.ci, fecha:x.fecha, motivo:MOTIVO_FRANQ, auto:true})).catch(() => SOL_AUTO.delete(x.sid));
+  }
+}
 async function leerSolicitudes(){
   const desde = enc(new Date(Date.now() - SOL_DIAS*864e5).toISOString());
   const rows = await paginas('eventos?select=tipo,edificio,guardia,detalle,created_at&tipo=in.(Solicitud,Respuesta)&created_at=gte.' + desde + '&order=created_at.asc');
@@ -2179,7 +2229,11 @@ async function leerSolicitudes(){
     if(r.d.estado === 'confirmado') x.monto = isFinite(+r.d.monto) ? +r.d.monto : x.montoGuardia;
   }
   for(const x of porSid.values()) if(x.clase === 'adelanto' && x.estado === 'aprobado' && x.montoGuardia != null) x.estado = 'por_confirmar';
-  return [...porSid.values()].sort((a,b) => b.t - a.t);
+  let esFranq = () => false;
+  try{ esFranq = await franquerosTodos(); }catch(e){ if(SOLO_CACHE) throw e; }
+  const todas = [...porSid.values()];
+  if(!SOLO_CACHE) rechazarFranqueros(todas.filter(esFranq));
+  return todas.filter(x => !esFranq(x)).sort((a,b) => b.t - a.t);
 }
 
 const porAtender = x => x.estado === 'pendiente' || x.estado === 'por_confirmar';
@@ -3119,6 +3173,9 @@ async function generarInforme(){
     }
     ev.sort((a,b) => a.t - b.t);
     const delMes = x => x.t >= desde && x.t < hasta;
+    /* "Doblar turno" repetido en el mismo turno: solo cuenta el último cambio */
+    { const ult = new Map(); for(const x of ev) if(x.e.tipo === 'Doblar turno') ult.set(claveDoble(x.e), x);
+      const vale = new Set(ult.values()); for(let i = ev.length - 1; i >= 0; i--) if(ev[i].e.tipo === 'Doblar turno' && !vale.has(ev[i])) ev.splice(i, 1); }
     const de = (...tipos) => ev.filter(x => tipos.includes(x.e.tipo));
     const base = x => ({fecha: fDia(x.t), hora: fHora(x.t)});
 

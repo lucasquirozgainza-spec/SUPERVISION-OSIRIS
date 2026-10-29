@@ -856,7 +856,10 @@ function pTurno(){
       <div class="field"><span>Novedades del turno</span><textarea id="sO" placeholder="Opcional"></textarea></div>
       <button class="btn prim bad" id="sOk">Marcar salida</button></div>`;
   $('#tNiv').onclick = async e => {
-    const b = e.target.closest('[data-n]'); if(!b) return; const n = +b.dataset.n; if(n === (T.nivel || 12)) return;
+    const b = e.target.closest('[data-n]'); if(!b) return; const n = +b.dataset.n; if(n === (T.nivel || 12) || G.cambiandoNivel) return;
+    /* ya estaba marcado 24 o 36 h: se confirma el cambio (evita marcarlo varias veces por error) */
+    if((T.nivel || 12) !== 12 && !confirm(`Este turno ya está marcado como turno de ${T.nivel} h.\n\n¿Cambiarlo a ${n} h${n === 12 ? ' (turno normal)' : ''}?`)) return;
+    G.cambiandoNivel = true; setTimeout(() => { G.cambiandoNivel = false; }, 1500);
     T.nivel = n; guardarTurno();
     await registrar('Doblar turno', {nivel: n, turno_ref: T.ref, guard_ci: T.ci});
     toast('Turno de ' + n + ' h registrado', 'var(--ok)'); pintar();
