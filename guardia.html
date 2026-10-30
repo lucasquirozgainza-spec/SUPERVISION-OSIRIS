@@ -537,6 +537,8 @@ const ICONOS = {
   cama:'<path d="M2 20V6M2 16h20M22 20v-6a3 3 0 0 0-3-3h-9v5"/><circle cx="6" cy="12" r="2"/>',
   mas:'<path d="M12 5v14M5 12h14"/>',
   whatsapp:'<path d="M3 21l1.7-5A8.5 8.5 0 1 1 8 19.3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z"/>',
+  hist:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+  pedido:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>',
   camara:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
 };
 const icono = (k, t = 22) => `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONOS[k] || ''}</svg>`;
@@ -844,6 +846,8 @@ function inicio(){
   if(modOn('incidentes')) tile('incidente', 'incidente', 'var(--bad)', 'Incidente', 'Reportar');
   if(modOn('encomiendas')) tile('encom', 'paquete', '#a16207', 'Encomiendas', 'Llegada y entrega');
   if(modOn('hospedajes')) tile('hosp', 'cama', '#0d9488', 'Hospedajes', 'Ingreso y salida');
+  tile('hist', 'hist', '#455a64', 'Historial', 'Visitas, rondas, turnos');
+  tile('sol', 'pedido', '#6d4c41', 'Solicitudes', 'Adelanto y día libre');
   if(optLink('mod', 'consultas') !== undefined ? optLink('mod', 'consultas') === true : (modOn('propietarios') || modOn('vehiculos') || modOn('normativas'))) tile('consultas', 'libro', '#37474f', 'Consultas', 'Propietarios, vehículos…');
   $('#main').innerHTML = `
     <div class="card turnoBox"><span class="tile" style="border:0;padding:0;min-height:0;background:none"><span class="ic" style="background:${G.turno ? 'var(--ok)' : 'var(--mute)'}">${icono(G.turno ? 'ingreso' : 'reloj')}</span></span>
@@ -853,9 +857,9 @@ function inicio(){
 }
 $('#main').addEventListener('click', e => {
   const b = e.target.closest('[data-ir]'); if(!b) return;
-  const P = {turno: pTurno, visitas: pVisitas, recu: pRecurrentes, ronda: pRonda, incidente: pIncidente, encom: pEncomiendas, hosp: pHospedajes, consultas: pConsultas};
+  const P = {turno: pTurno, visitas: pVisitas, recu: pRecurrentes, ronda: pRonda, incidente: pIncidente, encom: pEncomiendas, hosp: pHospedajes, consultas: pConsultas, hist: pHistorial, sol: pSolicitudes};
   if(P[b.dataset.ir]){
-    if(b.dataset.ir !== 'turno' && b.dataset.ir !== 'consultas' && !G.turno){ toast('Primero marca tu ingreso de turno', 'var(--warn)'); return ir(pTurno); }
+    if(!['turno', 'consultas', 'hist'].includes(b.dataset.ir) && !G.turno){ toast('Primero marca tu ingreso de turno', 'var(--warn)'); return ir(pTurno); }
     ir(P[b.dataset.ir]);
   }
 });
@@ -1558,6 +1562,175 @@ function pConsultas(tab){
     };
     pintarL(); $('#cB').oninput = pintarL;
   }).catch(() => { $('#cL').innerHTML = '<div class="msg bad">Sin conexión. Intenta de nuevo.</div>'; });
+}
+
+/* ---------- Historial: lo registrado en el edificio (como en la app) ---------- */
+const HIST_TIPOS = {
+  visitas: ['Visita', 'Salida de visita'],
+  rondas: ['Ronda'],
+  turnos: ['Ingreso de turno', 'Salida de turno', 'Doblar turno', 'Foto de turno'],
+  otros: ['Incidente', 'Encomienda', 'Entrega de encomienda', 'Hospedaje', 'Salida de hospedaje', 'Advertencia']
+};
+const ymdLocal = t => t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+const unir = a => a.filter(x => x !== undefined && x !== null && x !== '' && x !== false).join(' · ');
+function resumenEvento(e){
+  const d = detalleDe(e), dep = 'Depto ' + (d.depto || '-');
+  const nf = Array.isArray(d.fotos_url) ? d.fotos_url.length : (d.foto_url ? 1 : 0);
+  switch(e.tipo){
+    case 'Visita': return [d.nombre || 'Visita', unir([dep, d.ci && 'CI ' + d.ci, d.tarjeta && 'Tarjeta ' + d.tarjeta, d.placa && 'Placa ' + d.placa, d.motivo])];
+    case 'Salida de visita': return ['Salida: ' + (d.nombre || 'visita'), unir([dep, d.tarjeta && 'Tarjeta ' + d.tarjeta + (d.tarjeta_devuelta === false ? ' NO devuelta' : '')])];
+    case 'Ronda': return ['Ronda', unir([(nf || +d.fotos) && (nf || +d.fotos) + ' fotos', d.recorrido_m && d.recorrido_m + ' m recorridos', d.observaciones])];
+    case 'Ingreso de turno': return ['Ingreso de turno', d.observaciones || ''];
+    case 'Salida de turno': return ['Salida de turno', d.observaciones || ''];
+    case 'Doblar turno': return ['Dobló turno', d.nivel ? 'Turno de ' + d.nivel + ' h' : ''];
+    case 'Foto de turno': return ['Foto de turno', d.momento || ''];
+    case 'Incidente': return ['Incidente' + (d.tipo ? ': ' + d.tipo : ''), unir([d.lugar, d.descripcion])];
+    case 'Encomienda': return ['Encomienda', unir([dep, d.destinatario, d.empresa])];
+    case 'Entrega de encomienda': return ['Encomienda entregada', unir([dep, d.destinatario])];
+    case 'Hospedaje': return ['Hospedaje: ' + (d.huesped || ''), unir([dep, d.noches && d.noches + ' noches', d.plataforma])];
+    case 'Salida de hospedaje': return ['Salida de hospedaje: ' + (d.huesped || ''), dep];
+    case 'Advertencia': return ['Advertencia', d.motivo || ''];
+    default: return [e.tipo, ''];
+  }
+}
+const esMio = e => { const d = detalleDe(e); return d.link === G.token || (G.turno && G.turno.ci && String(d.guard_ci || '') === G.turno.ci); };
+function pHistorial(tab = 'visitas', dia = ymdLocal(new Date()), mios = false){
+  cabecera();
+  const tabs = [['visitas', 'Visitas'], ['rondas', 'Rondas'], ['turnos', 'Turnos'], ['otros', 'Otros']];
+  const hoy = ymdLocal(new Date()), ayer = ymdLocal(new Date(Date.now() - 864e5));
+  $('#main').innerHTML = `<div class="seg" id="hSeg" style="overflow-x:auto">${tabs.map(([k, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="acts" style="margin-bottom:10px"><button class="btn ${dia === hoy ? 'ok' : ''}" data-d="${hoy}">Hoy</button><button class="btn ${dia === ayer ? 'ok' : ''}" data-d="${ayer}">Ayer</button>
+      <input id="hDia" class="inp" type="date" value="${esc(dia)}" max="${hoy}" style="flex:2;min-width:0;padding:0 8px"></div>
+    <label class="chk" style="display:flex;gap:8px;align-items:center;margin:0 2px 10px;font-size:14px"><input type="checkbox" id="hMio" ${mios ? 'checked' : ''}> Solo lo que registré yo</label>
+    <div id="hL"><div class="empty">Cargando…</div></div>`;
+  const re = (t, d, m) => { G.pila[G.pila.length - 1] = [pHistorial, [t, d, m]]; pintar(); };
+  $('#hSeg').onclick = e => { const b = e.target.closest('[data-t]'); if(b) re(b.dataset.t, dia, mios); };
+  $('#main').querySelectorAll('[data-d]').forEach(b => b.onclick = () => re(tab, b.dataset.d, mios));
+  $('#hDia').onchange = () => { if($('#hDia').value) re(tab, $('#hDia').value, mios); };
+  $('#hMio').onchange = () => re(tab, dia, $('#hMio').checked);
+  (async () => {
+    const [y, m, d] = dia.split('-').map(Number), ini = new Date(y, m - 1, d), fin = new Date(y, m - 1, d + 1);
+    const tipos = HIST_TIPOS[tab];
+    let l;
+    try{
+      l = await api('eventos?select=id,created_at,tipo,guardia,device_id,detalle&edificio=eq.' + enc(G.ed) + '&tipo=' + enc(inList(tipos))
+        + '&created_at=gte.' + enc(new Date(+ini - 864e5).toISOString()) + '&created_at=lt.' + enc(new Date(+fin + 864e5).toISOString()) + '&order=created_at.desc&limit=1000');
+    }catch(_){ $('#hL').innerHTML = '<div class="msg bad">Sin conexión. Intenta de nuevo.</div>'; return; }
+    const pend = (await pendientesComoEventos(tipos)).map(e => ({...e, _pend: true}));
+    const vistos = new Set(l.map(e => detalleDe(e).uid));
+    l = [...pend.filter(e => !vistos.has(e.detalle.uid)), ...l]
+      .filter(e => { const t = horaReal(e); return t >= ini && t < fin; })
+      .filter(e => !G.link.bloque || !detalleDe(e).bloque || detalleDe(e).bloque === G.link.bloque)
+      .filter(e => !mios || esMio(e))
+      .sort((a, b) => horaReal(b) - horaReal(a));
+    if(!l.length){ $('#hL').innerHTML = '<div class="empty">No hay registros ese día.</div>'; return; }
+    $('#hL').innerHTML = `<div class="h2">${l.length} registro${l.length === 1 ? '' : 's'}</div><div class="card">${l.map((e, i) => { const [t, sub] = resumenEvento(e);
+      return `<div class="item" data-h="${i}" style="cursor:pointer"><div class="t"><b>${esc(hm(horaReal(e)))} · ${esc(t)}</b><span>${esc(unir([sub, e.guardia]))}${e._pend ? ' · <span class="badge" style="display:inline-block;color:#fff;background:var(--warn)">subiendo</span>' : ''}</span></div></div>`; }).join('')}</div>`;
+    $('#hL').onclick = e => { const b = e.target.closest('[data-h]'); if(b) ir(pHistDet, l[+b.dataset.h]); };
+  })();
+}
+const ETIQ = {nombre:'Nombre', ci:'CI', depto:'Depto.', motivo:'Motivo', tarjeta:'Tarjeta', tarjeta_devuelta:'Tarjeta devuelta', placa:'Placa', autoriza:'Autoriza', tipo:'Tipo', lugar:'Lugar',
+  descripcion:'Descripción', involucrados:'Involucrados', empresa:'Empresa', destinatario:'Destinatario', huesped:'Huésped', huespedes:'Huéspedes', noches:'Noches', dias:'Días', plataforma:'Plataforma',
+  documento:'Documento', observaciones:'Observaciones', recorrido_m:'Recorrido (m)', nivel:'Turno (horas)', cargo:'Cargo', momento:'Momento'};
+function pHistDet(e){
+  cabecera();
+  const d = detalleDe(e), [t] = resumenEvento(e);
+  const filas = [['Hora', diaHora(horaReal(e))], ['Guardia', e.guardia || '-'],
+    ...Object.keys(ETIQ).filter(k => d[k] !== undefined && d[k] !== null && d[k] !== '').map(k => [ETIQ[k], typeof d[k] === 'boolean' ? (d[k] ? 'Sí' : 'No') : String(d[k])])];
+  const fotos = [...new Set([d.foto_url, ...(Array.isArray(d.fotos_url) ? d.fotos_url : [])].filter(x => typeof x === 'string' && /^https?:/.test(x)))];
+  $('#main').innerHTML = `<div class="card"><b style="font-size:17px">${esc(t)}</b>
+    ${filas.map(([k, v]) => `<div class="item"><div class="t"><span>${esc(k)}</span><b style="white-space:pre-wrap">${esc(v)}</b></div></div>`).join('')}
+    ${e._pend ? '<div class="msg">Todavía se está subiendo desde este celular.</div>' : ''}
+    ${fotos.length ? `<div class="fotos" style="margin-top:12px">${fotos.map(u => `<a class="f" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover"></a>`).join('')}</div>` : ''}</div>`;
+}
+
+/* ---------- Solicitudes: adelanto y día libre (mismo formato que la app) ---------- */
+const bsTxt = n => n == null || isNaN(n) ? '-' : (Math.round(n) === +n ? String(Math.round(n)) : (+n).toFixed(2));
+const fechaCorta = ymd => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('es', {weekday:'short', day:'2-digit', month:'2-digit'}) : (ymd || ''); };
+async function misSolicitudes(){
+  const q = G.turno, desde = new Date(Date.now() - 120 * 864e5).toISOString();
+  const quien = q.ci ? 'detalle->>guard_ci=eq.' + enc(q.ci) : 'guardia=eq.' + enc(q.nombre);
+  const ev = [...await api('eventos?select=guardia,detalle,created_at&tipo=eq.Solicitud&edificio=eq.' + enc(G.ed) + '&' + quien + '&created_at=gte.' + enc(desde) + '&order=created_at.desc&limit=300'),
+    ...(await pendientesComoEventos(['Solicitud'])).filter(e => q.ci ? String(e.detalle.guard_ci || '') === q.ci : e.guardia === q.nombre).map(e => ({...e, _pend: true}))];
+  const lista = new Map(), montos = new Map();
+  for(const e of ev){
+    const d = detalleDe(e), sid = String(d.sid || ''); if(!sid) continue;
+    if(d.clase === 'monto'){ if(!montos.has(sid) || e._pend) montos.set(sid, +d.monto); continue; }
+    if(d.clase !== 'adelanto' && d.clase !== 'libre') continue;
+    if(lista.has(sid) && !e._pend) continue;
+    lista.set(sid, {sid, clase: d.clase, fecha: d.fecha || '', motivo: d.motivo || '', montoPedido: d.monto_pedido != null ? +d.monto_pedido : null, t: horaReal(e), estado: 'pendiente', enviado: !e._pend, nota: ''});
+  }
+  if(lista.size){
+    const resp = await api('eventos?select=detalle,created_at&tipo=eq.Respuesta&edificio=eq.' + enc(G.ed) + '&created_at=gte.' + enc(desde) + '&order=created_at.asc&limit=1000');
+    for(const r of resp){
+      const d = detalleDe(r), x = lista.get(String(d.sid || '')); if(!x) continue;
+      if(!['aprobado', 'rechazado', 'confirmado', 'no_entregado'].includes(d.estado)) continue;
+      x.estado = d.estado; x.nota = d.nota || d.motivo || ''; if(d.estado === 'confirmado') x.montoFinal = d.monto != null ? +d.monto : null;
+    }
+  }
+  for(const x of lista.values()){
+    x.montoGuardia = montos.has(x.sid) ? montos.get(x.sid) : null;
+    if(x.clase === 'adelanto' && x.estado === 'aprobado' && x.montoGuardia != null) x.estado = 'por_confirmar';
+  }
+  return [...lista.values()].sort((a, b) => b.t - a.t);
+}
+function estadoSol(x){
+  const adel = x.clase === 'adelanto';
+  switch(x.estado){
+    case 'aprobado': return [adel ? 'Aprobado: escribe el monto que recibiste' : 'Aprobado', 'var(--ok)'];
+    case 'rechazado': return ['No aprobado', 'var(--bad)'];
+    case 'por_confirmar': return ['Monto enviado (Bs ' + bsTxt(x.montoGuardia) + '): falta que supervisión lo confirme', 'var(--warn)'];
+    case 'confirmado': return ['Confirmado: Bs ' + bsTxt(x.montoFinal != null ? x.montoFinal : x.montoGuardia), 'var(--ok)'];
+    case 'no_entregado': return ['Supervisión no confirmó este adelanto', 'var(--bad)'];
+    default: return [x.enviado ? 'Esperando respuesta de supervisión' : 'Por enviar (se envía al volver la señal)', 'var(--mute)'];
+  }
+}
+function pSolicitudes(){
+  cabecera();
+  $('#main').innerHTML = `<div class="card"><div class="t" style="margin-bottom:10px"><b>${esc(G.turno.nombre)}</b><span style="color:var(--mute);font-size:13px;display:block">Tus pedidos llegan a supervisión. La respuesta aparece aquí.</span></div>
+    <div class="acts"><button class="btn ok" id="sAd">Pedir adelanto</button><button class="btn" id="sLi" style="background:var(--info);color:#fff">Pedir día libre</button></div></div>
+    <div class="h2">Mis pedidos</div><div id="sL"><div class="empty">Cargando…</div></div>`;
+  $('#sAd').onclick = () => ir(pPedir, 'adelanto');
+  $('#sLi').onclick = () => ir(pPedir, 'libre');
+  misSolicitudes().then(l => {
+    if(!l.length){ $('#sL').innerHTML = '<div class="empty">Todavía no pediste nada.</div>'; return; }
+    $('#sL').innerHTML = `<div class="card">${l.map((x, i) => { const [txt, col] = estadoSol(x), adel = x.clase === 'adelanto';
+      return `<div class="item" style="align-items:flex-start"><div class="t"><b>${adel ? 'Adelanto' + (x.montoPedido != null ? ' de Bs ' + esc(bsTxt(x.montoPedido)) : '') : 'Día libre'}${x.fecha ? ' · ' + esc(fechaCorta(x.fecha)) : ''}</b>
+        <span>Pedido el ${esc(diaHora(x.t))}${x.motivo ? ' · ' + esc(x.motivo) : ''}</span>
+        <span style="display:block;margin-top:4px"><span class="badge" style="display:inline-block;color:#fff;background:${col};white-space:normal">${esc(txt)}</span></span>
+        ${x.nota ? `<span style="display:block;margin-top:4px">Supervisión: ${esc(x.nota)}</span>` : ''}
+        ${adel && x.estado === 'aprobado' ? `<button class="btn ok" data-m="${i}" style="margin-top:8px">Escribir monto recibido</button>` : ''}</div></div>`; }).join('')}</div>`;
+    $('#sL').onclick = async e => {
+      const b = e.target.closest('[data-m]'); if(!b) return; const x = l[+b.dataset.m];
+      const r = prompt('¿Cuánto te dieron de adelanto? (Bs)\nSupervisión lo confirma.', x.montoPedido != null ? bsTxt(x.montoPedido) : '');
+      if(r === null) return;
+      const n = parseFloat(String(r).replace(',', '.'));
+      if(!(n > 0)) return toast('Escribe un monto válido', 'var(--bad)');
+      b.disabled = true;
+      await registrar('Solicitud', {clase: 'monto', sid: x.sid, monto: n});
+      toast('Monto enviado', 'var(--ok)'); pintar();
+    };
+  }).catch(() => { $('#sL').innerHTML = '<div class="msg bad">Sin conexión. Intenta de nuevo.</div>'; });
+}
+function pPedir(clase){
+  cabecera();
+  const adel = clase === 'adelanto', hoy = ymdLocal(new Date()), manana = ymdLocal(new Date(Date.now() + 864e5));
+  $('#main').innerHTML = `<div class="card"><b style="font-size:17px">${adel ? 'Pedir adelanto' : 'Pedir día libre'}</b>
+    ${adel ? `<div class="field"><span>Monto (Bs) *</span><input id="pM" type="number" inputmode="decimal" min="1" step="any" autocomplete="off"></div>` : ''}
+    <div class="field"><span>${adel ? 'Para qué día lo necesitas' : 'Día libre que pides'} *</span><input id="pF" type="date" min="${hoy}" value="${adel ? hoy : manana}"></div>
+    <div class="field"><span>Motivo${adel ? '' : ' *'}</span><textarea id="pT"></textarea></div>
+    <button class="btn prim" id="pOk">Enviar pedido</button></div>`;
+  $('#pOk').onclick = async () => {
+    const fecha = v('pF'), motivo = v('pT');
+    if(!fecha) return toast('Elige la fecha', 'var(--bad)');
+    const monto = adel ? parseFloat(v('pM').replace(',', '.')) : null;
+    if(adel && !(monto > 0)) return toast('Escribe el monto', 'var(--bad)');
+    if(!adel && !motivo) return toast('Escribe el motivo', 'var(--bad)');
+    ocupado($('#pOk'), true, 'Enviando…');
+    const sid = 'web_' + G.devId + '_' + Date.now() + '_' + azar(4);
+    await registrar('Solicitud', adel ? {clase: 'adelanto', sid, motivo, fecha, monto_pedido: monto} : {clase: 'libre', sid, fecha, motivo});
+    toast('Pedido enviado a supervisión', 'var(--ok)'); volver();
+  };
 }
 
 /* ---------- Arranque ---------- */

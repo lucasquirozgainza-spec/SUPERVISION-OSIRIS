@@ -3922,7 +3922,7 @@ async function cargarAjustesEd(){
         <div class="dos"><label class="field"><span>Rondas cada (h)</span><input id="aRonda" type="number" min="1" max="12" value="${+M.ronda_cada || 2}" inputmode="numeric"></label>
           <label class="field"><span>Tolerancia (min)</span><input id="aTol" type="number" min="0" max="60" step="5" value="${Turnos.toleranciaDe(M)}" inputmode="numeric"></label></div>
         <label class="chk"><input type="checkbox" data-mod="alertas" ${M.alertas !== false ? 'checked' : ''}> Correo si el guardia no entra</label>
-        <label class="chk"><input type="checkbox" data-mod="alertas_ronda" ${M.alertas_ronda === true ? 'checked' : ''}> Correo si falta una ronda</label>
+        <label class="chk"><input type="checkbox" data-mod="alertas_ronda" ${M.alertas_ronda !== false ? 'checked' : ''}> Correo si falta una ronda</label>
         <label class="chk"><input type="checkbox" data-mod="un_guardia" ${M.un_guardia === true ? 'checked' : ''}> Un solo guardia (sin relevo)</label>
         ${info('Al cambiar el relevo 1, el 2 se pone 12 h después. Los celulares con horario propio lo mantienen. La tolerancia es el margen que no cuenta; pasado el margen se cuentan todos los minutos. Los correos llegan 30 minutos después del relevo o de la ronda que faltó. "Un solo guardia": sus horas extras se cuentan contra su propio horario.')}`)}
       ${acc('edificio', 'Bloques / torres', torres.length ? esc(torres.join(' · ')) : 'Sin bloques', `
