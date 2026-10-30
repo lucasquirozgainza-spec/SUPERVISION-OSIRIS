@@ -694,6 +694,26 @@ input[type=checkbox],input[type=radio]{accent-color:var(--g2)}
   header{margin:0 16px;border-radius:0 0 24px 24px}
   .bnav button.on{background:color-mix(in srgb, var(--g2) 9%, transparent)}
 }
+
+/* ---- fila compacta: edificio · periodo · lupa (la búsqueda se abre encima de la fila) ---- */
+header .row{position:relative;align-items:center;gap:6px;margin-top:8px}
+header .row select,header .row .lockedEd{height:38px;padding-top:0;padding-bottom:0;font-size:15px;border-radius:10px}
+header .row #edif{flex:1.5 1 0;min-width:0}
+header .row .periodo{flex:1 1 0;min-width:0}
+.rlupa{flex:0 0 38px;width:38px;height:38px;border-radius:10px;border:0;background:#fff;color:#121516;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.12);padding:0}
+.rlupa[hidden]{display:none}
+header .row .hbus{position:absolute;inset:0;margin:0;z-index:2;display:flex}
+header .row .hbus[hidden]{display:none}
+header .row .hbus input{height:38px;border-radius:10px;padding:0 40px 0 38px;font-size:16px}
+header .row .hlupa{left:11px}
+.hcerrar{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;background:none;color:#5E6668;font-size:15px;border-radius:8px}
+
+/* barra inferior siempre fija: todas las vistas ocupan al menos la pantalla, así el navegador
+   del celular no muestra/oculta su barra al cambiar de sección (eso hacía "subir" la barra) */
+main{min-height:calc(100svh - 120px)}
+@supports not (height:100svh){ main{min-height:calc(100vh - 120px)} }
+.bnav{transform:translate3d(0,0,0);will-change:transform}
+html{overscroll-behavior-y:none}
 </style>
 </head>
 <body>
@@ -716,8 +736,9 @@ input[type=checkbox],input[type=radio]{accent-color:var(--g2)}
       <option value="30">30 días</option>
     </select>
     <select id="mesSel" class="periodo" aria-label="Mes" hidden></select>
+    <button type="button" class="rlupa" id="rLupa" aria-label="Buscar" hidden></button>
+    <form class="hbus" id="hBus" role="search" hidden><span class="hlupa" id="hLupa"></span><input id="hQ" type="search" placeholder="Nombre, carnet, placa o tarjeta" autocomplete="off" enterkeyhint="search" aria-label="Buscar"><button type="button" class="hcerrar" id="hCerrar" aria-label="Cerrar búsqueda">✕</button></form>
   </div>
-  <form class="hbus" id="hBus" role="search" hidden><span class="hlupa" id="hLupa"></span><input id="hQ" type="search" placeholder="Buscar nombre, carnet, placa o tarjeta" autocomplete="off" enterkeyhint="search" aria-label="Buscar"></form>
   <div class="tabs" id="tabs"></div>
 </header>
 
@@ -2866,35 +2887,60 @@ const Cobros = (() => {
       ${kpis([[bsK(n.total), 'Total · Bs'], [bsK(pagado(n)), 'Cobrado · Bs'], [`<span class="pill ${cl}">${et}</span>`, 'Estado']])}
       <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button>${saldo(n) > 0 ? '<button class="btn prim" id="vCob" style="background:var(--ok)">Registrar cobro</button>' : ''}</div>
       ${recs.length ? `<div class="h2">Recibos</div><div class="lista">${recs.map(r => `<div class="it${r.anulado ? ' anul' : ''}" data-rec="${r.numero}"><div class="t"><b>Recibo N° ${num4(r.numero)}</b><small>${esc(fechaCorta(r.fecha))} · ${esc(r.forma)}</small></div><div class="v"><span class="mon">Bs ${bs(r.monto)}</span><small><span class="pill ${r.anulado ? 'bad' : 'ok'}">${r.anulado ? 'Anulado' : 'Vigente'}</span></small></div></div>`).join('')}</div>` : ''}
-      <div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div><div id="vMsg"></div>`);
+      <div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div>
+      <div class="h2">Otras acciones</div>
+      <div class="acts"><button class="btn" id="vEdit">Editar nota</button><button class="btn danger" id="vDel">Eliminar nota</button></div>
+      <div id="vMsg"></div>`);
     pdfListo().then(ok => { if(ok) previa($('#vPrev'), () => pdfNota(n)); });
+    $('#vEdit').onclick = () => formNota(n);
+    $('#vDel').onclick = async () => {
+      const vig = recs.filter(r => !r.anulado);
+      if(vig.length) return $('#vMsg').innerHTML = `<div class="msg bad">Esta nota tiene ${vig.length} recibo${vig.length === 1 ? '' : 's'} vigente${vig.length === 1 ? '' : 's'}. Anúlalo${vig.length === 1 ? '' : 's'} o elimínalo${vig.length === 1 ? '' : 's'} primero.</div>`;
+      if(!confirm(`¿Eliminar la nota N° ${num4(n.numero)} de ${n.cliente ? n.cliente.nombre : ''} por Bs ${bs(n.total)}?\n\nNo se puede deshacer.`)) return;
+      $('#vDel').disabled = true;
+      try{
+        await borrarNum('cob_nota', n.numero);
+        C.notas = C.notas.filter(x => +x.numero !== +n.numero);
+        cerrarHoja(); repintar();
+      }catch(e){ $('#vDel').disabled = false; $('#vMsg').innerHTML = `<div class="msg bad">No se pudo eliminar: ${esc(e.message)}</div>`; }
+    };
     $('#vPdf').onclick = () => { if(!window.jspdf) return $('#vMsg').innerHTML = '<div class="msg bad">Sin conexión: no se pudo cargar el PDF.</div>'; compartir(pdfNota(n), nombreNota(n)); };
     if($('#vCob')) $('#vCob').onclick = () => formRecibo(n);
     $('#panel').querySelectorAll('[data-rec]').forEach(el => el.onclick = () => { const r = C.recibos.find(x => +x.numero === +el.dataset.rec); if(r) verRecibo(r); });
   }
   function totalDe(items){ return items.reduce((a, i) => a + (+i.cant || 0) * (+i.precio || 0), 0); }
-  function formNota(){
-    const lista = clientes(), hoy = new Date(), per = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+  function formNota(previo){
+    /* previo: nota que se edita (mismo formulario, ya lleno) */
+    const lista = clientes(), hoy = new Date(), per = previo && previo.periodo ? previo.periodo : hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
     const meses = []; for(let i = -9; i <= 2; i++){ const x = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1); meses.push(x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0')); }
     const cli = cid => C.clientes.get(cid);
     const lineaBase = (cid, p) => ({detalle: `${(cli(cid) && cli(cid).concepto) || CONCEPTO_DEF}, ${periodoTxt(p)}`, cant: 1, precio: cli(cid) && cli(cid).monto !== '' ? +cli(cid).monto : ''});
     const n = {cid: (C.fEd && lista.find(x => x.nombre === C.fEd) || lista[0]).cid, numero: sigNota(), fecha: ymd(hoy), periodo: per, obs: '', firma: true, metodos: (C.empresa.metodos || []).slice(0, 1)};
     n.items = [lineaBase(n.cid, per)];
-    hoja(`<h2>Nueva nota</h2>
-      <label class="field"><span>Edificio</span><select id="nCli">${lista.map(x => `<option value="${esc(x.cid)}" ${x.cid === n.cid ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>
+    if(previo){
+      Object.assign(n, {cid: previo.cid, numero: previo.numero, fecha: previo.fecha || n.fecha, periodo: per, obs: previo.obs || '', firma: previo.firma !== false,
+        metodos: Array.isArray(previo.metodos) ? previo.metodos.slice(0, 1) : n.metodos,
+        items: (previo.items || []).map(i => ({detalle: i.detalle, cant: i.cant, precio: i.precio}))});
+      if(!n.items.length) n.items = [lineaBase(n.cid, per)];
+      if(!C.clientes.has(n.cid) && previo.cliente) C.clientes.set(n.cid, previo.cliente);
+      if(!meses.includes(per)) meses.push(per), meses.sort();
+    }
+    const listaCli = clientes();
+    hoja(`<h2>${previo ? 'Editar nota N° ' + num4(previo.numero) : 'Nueva nota'}</h2>
+      <label class="field"><span>Edificio</span><select id="nCli">${listaCli.map(x => `<option value="${esc(x.cid)}" ${x.cid === n.cid ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>
       <div class="dos"><label class="field"><span>N°</span><input id="nNum" inputmode="numeric" value="${n.numero}"></label>
         <label class="field"><span>Fecha</span><input id="nFec" type="date" value="${n.fecha}"></label></div>
 <div class="dos"><label class="field"><span>Mes</span><select id="nPer">${meses.reverse().map(p => `<option value="${p}" ${p === per ? 'selected' : ''}>${esc(periodoTxt(p))}</option>`).join('')}</select></label><label class="field"><span>Hoja</span><select id="nHoja">${HOJAS.map(([k, t]) => `<option value="${k}" ${k === (C.empresa.hojaNota || 'carta') ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
       <div class="h2">Detalle</div><div id="nItems"></div>
       <button class="btn" id="nMas" style="width:100%;height:44px">${icono('mas1', 15)} Agregar línea</button>
       <div class="card" style="margin-top:12px"><div class="total"><span>Total</span><span id="nTot"></span></div><div class="lit" id="nLit"></div></div>
-      <details class="info"><summary>${icono('mas1', 14)} Observaciones</summary><div><textarea id="nObs" placeholder="Opcional"></textarea></div></details>
+      <details class="info"${n.obs ? ' open' : ''}><summary>${icono('mas1', 14)} Observaciones</summary><div><textarea id="nObs" placeholder="Opcional">${esc(n.obs)}</textarea></div></details>
       <div class="h2">Forma de pago</div>
-      <div class="chips" id="nMet" style="margin-top:0">${[['', 'Ninguna'], ...METODOS].map(([k, t]) => `<button data-met="${k}" class="tab${((C.empresa.metodos || [])[0] || '') === k ? ' on' : ''}">${t}</button>`).join('')}</div>
+      <div class="chips" id="nMet" style="margin-top:0">${[['', 'Ninguna'], ...METODOS].map(([k, t]) => `<button data-met="${k}" class="tab${(n.metodos[0] || '') === k ? ' on' : ''}">${t}</button>`).join('')}</div>
       ${(C.empresa.metodos || []).includes('qr') && !C.empresa.qr ? '' : ''}
-      <label class="chk" style="border:0"><input type="checkbox" id="nFir" checked> Con firma y sello</label>
+      <label class="chk" style="border:0"><input type="checkbox" id="nFir" ${n.firma ? 'checked' : ''}> Con firma y sello</label>
       <div id="nMsg"></div>
-      <button class="btn prim" id="nPdf">Generar PDF</button>
+      <button class="btn prim" id="nPdf">${previo ? 'Guardar cambios y generar PDF' : 'Generar PDF'}</button>
       <div class="h2">Vista previa</div><div class="prevCaja" id="nPrev"></div>`);
     const pintarItems = () => { $('#nItems').innerHTML = n.items.map((it, i) => `<div class="item" data-i="${i}">
         <label class="field det"><span>Concepto</span><input data-k="detalle" value="${esc(it.detalle)}"></label>
@@ -2933,11 +2979,13 @@ const Cobros = (() => {
       if(!(s.numero > 0)) return m('Escribe el número.');
       if(!s.items.length || !(s.total > 0)) return m('Pon al menos un concepto con su precio.');
       const usada = C.notas.find(x => +x.numero === s.numero);
-      if(usada && usada.cid !== s.cid) return m(`El N° ${num4(s.numero)} ya es de ${usada.cliente ? usada.cliente.nombre : 'otra nota'}.`);
+      if(usada && (previo ? +previo.numero !== s.numero : usada.cid !== s.cid)) return m(`El N° ${num4(s.numero)} ya es de ${usada.cliente ? usada.cliente.nombre : 'otra nota'}.`);
       const sh = compartir(pdfNota(s), nombreNota(s));
       try{
-        await borrarNum('cob_nota', s.numero); await guardarEv('cob_nota', s);
-        C.notas = [s, ...C.notas.filter(x => +x.numero !== s.numero)].sort((a, b) => b.numero - a.numero);
+        await reemplazar('cob_nota', s, previo ? previo.numero : null);
+        /* si cambió el número, sus recibos pasan al número nuevo */
+        if(previo && +previo.numero !== s.numero) for(const r of recibosDe(previo.numero)){ const x = {...r, nota: s.numero}; await reemplazar('cob_recibo', x); C.recibos = C.recibos.map(y => +y.numero === +r.numero ? x : y); }
+        C.notas = [s, ...C.notas.filter(x => +x.numero !== s.numero && (!previo || +x.numero !== +previo.numero))].sort((a, b) => b.numero - a.numero);
         cerrarHoja(); repintar();
       }catch(e){ m('El PDF se generó, pero no se guardó: ' + e.message); }
       if(sh) await sh;
@@ -2968,7 +3016,7 @@ const Cobros = (() => {
       <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button>${r.anulado ? '' : '<button class="btn" id="vEdit">Editar</button>'}</div>
       <div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div>
       <div class="h2">Otras acciones</div>
-      <div class="acts">${r.anulado ? '<button class="btn" id="vRest">Quitar anulación</button>' : '<button class="btn danger" id="vAnul">Anular recibo</button>'}</div>
+      <div class="acts">${r.anulado ? '<button class="btn" id="vRest">Quitar anulación</button>' : '<button class="btn danger" id="vAnul">Anular recibo</button>'}<button class="btn danger" id="vDelR">Eliminar recibo</button></div>
       <div id="vMsg"></div>`);
     pdfListo().then(ok => { if(ok) previa($('#vPrev'), () => pdfRecibo(r)); });
     $('#vPdf').onclick = () => { if(window.jspdf) compartir(pdfRecibo(r), nombreRecibo(r)); };
@@ -2981,6 +3029,15 @@ const Cobros = (() => {
       }catch(e){ msg('No se pudo guardar: ' + e.message); }
     };
     if($('#vEdit')) $('#vEdit').onclick = () => formRecibo(n, r);
+    $('#vDelR').onclick = async () => {
+      if(!confirm(`¿Eliminar el recibo N° ${num4(r.numero)} por Bs ${bs(r.monto)}?${n && !r.anulado ? ' La nota N° ' + num4(n.numero) + ' volverá a mostrar ese saldo pendiente.' : ''}\n\nNo se puede deshacer. Si solo quieres dejar constancia, usa Anular.`)) return;
+      $('#vDelR').disabled = true;
+      try{
+        await borrarNum('cob_recibo', r.numero);
+        C.recibos = C.recibos.filter(x => +x.numero !== +r.numero);
+        cerrarHoja(); repintar();
+      }catch(e){ $('#vDelR').disabled = false; msg('No se pudo eliminar: ' + e.message); }
+    };
     if($('#vAnul')) $('#vAnul').onclick = () => {
       const motivo = prompt(`¿Anular el recibo N° ${num4(r.numero)} por Bs ${bs(r.monto)}?${n ? ' La nota N° ' + num4(n.numero) + ' volverá a mostrar ese saldo pendiente.' : ''}\n\nEscribe el motivo:`);
       if(motivo === null) return;
@@ -4987,7 +5044,9 @@ function irA(v, desdeAtras){
   $('#hTit').textContent = TITULOS[v] || ''; subtituloVista();
   /* Cobros, Peticiones y Ajustes son de todos los edificios: sin selector arriba */
   $('header .row').hidden = v === 'cob' || v === 'cfg' || v === 'sol';
-  $('#hBus').hidden = ACC.modo === 'admin' || !['mov','gua','inf','bus'].includes(v);
+  const conBus = ACC.modo !== 'admin' && ['mov','gua','inf','bus'].includes(v);
+  $('#rLupa').hidden = !conBus || v === 'bus';
+  $('#hBus').hidden = !(conBus && v === 'bus');
   $('#hQ').value = v === 'bus' ? BUS.q : '';
   $('#tabs').style.display = v === 'mov' ? '' : 'none';
   $('#online').style.display = v === 'mov' ? '' : 'none';
@@ -5020,6 +5079,14 @@ function subtituloVista(){
 $('#cfgBtn').innerHTML = icono('engranaje', 20);
 $('#cfgBtn').addEventListener('click', () => irA('cfg'));
 $('#hLupa').innerHTML = icono('buscar', 18);
+$('#rLupa').innerHTML = icono('buscar', 19);
+/* la lupa abre la búsqueda encima de la fila de edificio y mes */
+$('#rLupa').addEventListener('click', () => { $('#hBus').hidden = false; $('#rLupa').hidden = true; $('#hQ').focus(); });
+$('#hCerrar').addEventListener('click', () => {
+  $('#hQ').value = '';
+  if(vistaActual === 'bus') return history.length > 1 ? history.back() : irA('mov');
+  $('#hBus').hidden = true; $('#rLupa').hidden = false;
+});
 $('#hBus').addEventListener('submit', e => {
   e.preventDefault();
   BUS.q = $('#hQ').value.trim(); $('#hQ').blur();
@@ -5099,7 +5166,7 @@ $('#mesSel').addEventListener('change', () => {
   } else {
     splashTxt('Verificando acceso');
     if(!(await accesoSupervision())) return;
-    $('#bnav').hidden = false; $('#cfgBtn').hidden = false; $('#hBus').hidden = false;
+    $('#bnav').hidden = false; $('#cfgBtn').hidden = false; $('#rLupa').hidden = false;
     splashTxt('Conectando con la nube');
     let conCache = false;
     try{ await deCache(cargarEdificios); conCache = !!st.edif; }catch(_){}
