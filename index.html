@@ -885,7 +885,9 @@ function conTope(ms){ const c = new AbortController(); const t = setTimeout(() =
    Cada lectura se guarda en este celular (solo supervisión). Al abrir la app o una
    sección se pinta al instante con lo guardado y por detrás se pide lo nuevo.
    La clave ignora la hora exacta de las fechas (solo el día), así coincide entre aperturas. */
-const CACHE = {mem:new Map(), pref:'osiris_c1:', idx:'osiris_c1_idx', tope:3.2e6};
+/* c2: se descarta lo guardado del servidor anterior (antes del cambio de servidor había datos vacíos o viejos) */
+const CACHE = {mem:new Map(), pref:'osiris_c2:', idx:'osiris_c2_idx', tope:3.2e6};
+try{ Object.keys(localStorage).filter(k => k.startsWith('osiris_c1')).forEach(k => localStorage.removeItem(k)); }catch(_){}
 let SOLO_CACHE = false;
 const claveCache = p => p.replace(/(\d{4}-\d{2}-\d{2})T[\d%A.:]+Z/g, '$1');
 function cachePermitido(p){
@@ -2327,7 +2329,11 @@ async function leerSolicitudes(){
     const x = porSid.get(r.sid); if(!x) continue;
     if(!['aprobado','rechazado','confirmado','no_entregado'].includes(r.d.estado)) continue;
     x.estado = r.d.estado; x.cuandoResp = r.t;
-    if(r.d.estado === 'confirmado') x.monto = isFinite(+r.d.monto) ? +r.d.monto : x.montoGuardia;
+    if(r.d.estado === 'confirmado'){
+      x.monto = isFinite(+r.d.monto) ? +r.d.monto : x.montoGuardia;
+      /* fecha en que se entregó (la elige supervisión); cuenta para ese mes en Contabilidad */
+      if(/^\d{4}-\d{2}-\d{2}$/.test(r.d.fecha_entrega || '')){ x.fechaEntrega = r.d.fecha_entrega; x.cuandoResp = new Date(r.d.fecha_entrega + 'T12:00:00'); }
+    }
   }
   for(const x of porSid.values()) if(x.clase === 'adelanto' && x.estado === 'aprobado' && x.montoGuardia != null) x.estado = 'por_confirmar';
   let esFranq = () => false;
@@ -2380,11 +2386,20 @@ function itemSol(x, conEdificio){
   const b = (est, txt, cls = 'btn') => `<button class="${cls}" data-sact="${est}" data-sid="${esc(x.sid)}">${txt}</button>`;
   let [et, cl] = SOL_EST[x.estado] || ['', ''];
   if(x.estado === 'aprobado' && !libre) et = 'Aprobado, falta el monto';
-  if(x.estado === 'confirmado') et = 'Entregado ' + bsTxt(x.monto);
+  if(x.estado === 'confirmado') et = 'Entregado ' + bsTxt(x.monto) + (x.fechaEntrega ? ' el ' + x.fechaEntrega.slice(8, 10) + '/' + x.fechaEntrega.slice(5, 7) : '');
+  const hoyTxt = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+  /* entregar ya: monto y fecha (hoy por defecto) */
+  const formEntrega = (montoDef, txtBtn, abierto) => `<div class="sconf sEnt" data-sent="${esc(x.sid)}" ${abierto ? '' : 'hidden'}>
+      <div class="dos"><label class="field"><span>Monto entregado (Bs)</span><input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(montoDef ?? '')}" data-smonto="${esc(x.sid)}"></label>
+      <label class="field"><span>Fecha de entrega</span><input type="date" value="${hoyTxt}" max="${hoyTxt}" data-sfecha="${esc(x.sid)}"></label></div>
+      <div class="acts">${b('entregar', txtBtn, 'btn prim')}</div></div>`;
   let pie = '';
-  if(x.estado === 'pendiente') pie = `<div class="acts">${b('rechazado', 'Denegar')}${b('aprobado', 'Aceptar', 'btn prim')}</div>`;
+  if(x.estado === 'pendiente') pie = `<div class="acts">${b('rechazado', 'Denegar')}${b('aprobado', 'Aceptar', 'btn prim')}</div>`
+    + (libre ? '' : `<button class="lnkbtn" data-sabrir="${esc(x.sid)}" style="margin-top:8px">Aceptar y marcar entregado</button>${formEntrega(x.montoPedido, 'Aceptar y entregado', false)}`);
+  else if(x.estado === 'aprobado' && !libre) pie = formEntrega(x.montoPedido, 'Marcar entregado', true);
   else if(x.estado === 'por_confirmar') pie = `<div class="sconf"><label class="field"><span>El guardia dice que recibió ${esc(bsTxt(x.montoGuardia))}. Monto entregado</span>
       <input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(x.montoGuardia)}" data-smonto="${esc(x.sid)}"></label>
+      <label class="field"><span>Fecha de entrega</span><input type="date" value="${hoyTxt}" max="${hoyTxt}" data-sfecha="${esc(x.sid)}"></label>
       <div class="acts">${b('no_entregado', 'No se lo di')}${b('confirmado', 'Confirmar', 'btn prim')}</div></div>`;
   const cambiar = x.estado === 'aprobado' ? b('rechazado', 'Cambiar a denegado', 'lnkbtn') : x.estado === 'rechazado' ? b('aprobado', 'Cambiar a aceptado', 'lnkbtn') : '';
   return `<div class="srow">
@@ -2514,16 +2529,22 @@ async function responderSol(sid, estado){
   const x = SOL.lista.find(s => s.sid === sid); if(!x) return;
   const msg = t => { const m = document.querySelector(`[data-smsg="${CSS.escape(sid)}"]`); if(m) m.innerHTML = t ? `<div class="msg bad">${esc(t)}</div>` : ''; };
   const det = {sid, estado, clase:x.clase, guardia:x.guardia, ci:x.ci, fecha:x.fecha};
-  if(estado === 'confirmado'){
+  if(estado === 'confirmado' || estado === 'entregar'){
     const inp = document.querySelector(`[data-smonto="${CSS.escape(sid)}"]`);
     const v = parseFloat(String(inp ? inp.value : x.montoGuardia).replace(',', '.'));
     if(!(v > 0)) return msg('Escribe el monto que le diste.');
+    const f = document.querySelector(`[data-sfecha="${CSS.escape(sid)}"]`);
+    if(f && f.value){ if(f.value > f.max) return msg('La fecha de entrega no puede ser futura.'); det.fecha_entrega = f.value; }
     det.monto = v;
   }
   if(estado === 'no_entregado' && !confirm(`¿Marcar que NO le diste ${bsTxt(x.montoGuardia)} a ${x.guardia}? No contará como adelanto.`)) return;
   document.querySelectorAll(`[data-sid="${CSS.escape(sid)}"]`).forEach(b => b.disabled = true);
   try{
-    await apiEscribir('POST', 'eventos', nuevoEvento('Respuesta', x.ed, 'Supervisión', det));
+    if(estado === 'entregar'){
+      /* aceptar (si estaba pendiente) y dejarlo como entregado en un solo paso */
+      if(x.estado === 'pendiente') await apiEscribir('POST', 'eventos', nuevoEvento('Respuesta', x.ed, 'Supervisión', {sid, estado:'aprobado', clase:x.clase, guardia:x.guardia, ci:x.ci, fecha:x.fecha}));
+      await apiEscribir('POST', 'eventos', nuevoEvento('Respuesta', x.ed, 'Supervisión', {...det, estado:'confirmado'}));
+    } else await apiEscribir('POST', 'eventos', nuevoEvento('Respuesta', x.ed, 'Supervisión', det));
     await cargarSolicitudes();
     if($('#gSolG') && SOL.ficha) historialSolGuardia(SOL.ficha.ed, SOL.ficha.g, SOL.ficha.mes);
   }catch(e){
@@ -2538,6 +2559,8 @@ $('#panel').addEventListener('click', ev => {
 });
 $('#v-sol').addEventListener('change', ev => { if(ev.target.id === 'contMes'){ CONT.mes = ev.target.value; pintarSolicitudes(); } });
 $('#v-sol').addEventListener('click', ev => {
+  const ab = ev.target.closest('[data-sabrir]');
+  if(ab){ const f = document.querySelector(`[data-sent="${CSS.escape(ab.dataset.sabrir)}"]`); if(f){ f.hidden = !f.hidden; ab.hidden = !f.hidden; } return; }
   const b = ev.target.closest('[data-sact]');
   if(b) return responderSol(b.dataset.sid, b.dataset.sact);
   const f = ev.target.closest('#solF [data-f]');
