@@ -1,7 +1,7 @@
 name: Avisos Osiris
+# Los avisos ahora los manda Google Apps Script (alertas/osiris_avisos.gs) cada 10 minutos:
+# GitHub corria esto cada 4 a 6 horas y el servicio de correo rechazaba sus envios (403).
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 jobs:
   revisar:
