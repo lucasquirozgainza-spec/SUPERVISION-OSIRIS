@@ -252,7 +252,7 @@ const OCR = (() => {
   }
   function ciSuelto(texto){
     const nums = []; const re = /(^|[^\d/\-.])(\d{6,8})(?![\d/\-.])/g; let m;
-    while((m = re.exec(texto))) nums.push(m[2]);
+    while((m = re.exec(texto))) if(m[2][0] !== '0') nums.push(m[2]); /* un CI no empieza con 0 (el número rojo de costado del carnet sí) */
     if(!nums.length) return null;
     nums.sort((a, b) => b.length - a.length); return nums[0];
   }
@@ -396,7 +396,7 @@ const OCR = (() => {
     return cargando;
   }
   /* imagen preparada para leer: gris con contraste estirado (a mano: Safari no soporta ctx.filter) y girada si hace falta */
-  async function preparar(blob, grados = 0){
+  async function preparar(blob, grados = 0, verde = false){
     const url = URL.createObjectURL(blob);
     try{
       const img = await new Promise((s, m) => { const i = new Image(); i.onload = () => s(i); i.onerror = () => m(new Error('foto ilegible')); i.src = url; });
@@ -411,7 +411,7 @@ const OCR = (() => {
       x.drawImage(img, -w / 2, -h / 2, w, h);
       x.setTransform(1, 0, 0, 1, 0, 0);
       const d = x.getImageData(0, 0, c.width, c.height), p = d.data, hist = new Uint32Array(256), n = p.length / 4;
-      for(let i = 0; i < p.length; i += 4){ const g = (p[i] * 77 + p[i + 1] * 150 + p[i + 2] * 29) >> 8; p[i] = g; hist[g]++; }
+      for(let i = 0; i < p.length; i += 4){ const g = verde ? p[i + 1] : (p[i] * 77 + p[i + 1] * 150 + p[i + 2] * 29) >> 8; p[i] = g; hist[g]++; }
       let lo = 0, hi = 255, acc = 0;
       for(; lo < 255; lo++){ acc += hist[lo]; if(acc > n * 0.02) break; }
       acc = 0; for(; hi > 0; hi--){ acc += hist[hi]; if(acc > n * 0.02) break; }
@@ -421,10 +421,11 @@ const OCR = (() => {
       return c;
     } finally { URL.revokeObjectURL(url); }
   }
-  async function texto(blob, grados = 0, psm = '3'){
+  async function texto(blob, grados = 0, psm = '3', soloDigitos = false, verde = false){
     const w = await motor();
-    await w.setParameters({tessedit_pageseg_mode: psm});
-    const r = await w.recognize(await preparar(blob, grados));
+    /* para números de tarjeta: solo dígitos (evita que lea 8 como B o 5 como S) */
+    await w.setParameters({tessedit_pageseg_mode: psm, tessedit_char_whitelist: soloDigitos ? '0123456789' : ''});
+    const r = await w.recognize(await preparar(blob, grados, verde));
     return (r && r.data && r.data.text) || '';
   }
   const datosDe = t => !!(ciMrz(t) || ciEtiqueta(t) || nombreMrz(t) || nombreEtiquetas(t) || nombreAntiguo(t));
@@ -450,14 +451,23 @@ const OCR = (() => {
       const a = await lado(frente), b = reverso ? await lado(reverso) : '';
       /* por si sacaron primero el reverso: se prueba también al revés */
       const r1 = parseDosLados(a, b), r2 = b ? parseDosLados(b, a) : {};
-      return {ci: r1.ci || r2.ci || null, nombre: r1.nombre || r2.nombre || null, textos: [a, b].filter(Boolean)};
+      let ci = r1.ci || r2.ci || null; const textos = [a, b].filter(Boolean);
+      /* el N° del carnet viene impreso en ROJO y en gris casi no se ve: se reintenta con el canal verde, donde el rojo sale oscuro */
+      if(!ci){
+        for(const [blob, otro] of [[frente, b], [reverso, a]]){
+          if(!blob) continue;
+          let tv = ''; try{ tv = await texto(blob, 0, '3', false, true) + '\n' + await texto(blob, 0, '11', false, true); }catch(_){ continue; }
+          textos.push(tv); ci = parseDosLados(tv, otro).ci; if(ci) break;
+        }
+      }
+      return {ci, nombre: r1.nombre || r2.nombre || null, textos};
     }),
     /* varias pasadas; si dos coinciden se acepta; si no, la que salió exacta */
     tarjeta: (blob, digitos, conocidas) => enFila(async () => {
       const votos = {}, parciales = new Set(); let primero = null;
       /* en fotos reales el número suele ir impreso de costado: 270° con texto disperso (psm 11) fue lo que mejor leyó */
       for(const [g, psm] of [[0, '3'], [270, '11'], [90, '11'], [0, '11'], [270, '3'], [90, '3']]){
-        let t = ''; try{ t = await texto(blob, g, psm); }catch(_){ continue; }
+        let t = ''; try{ t = await texto(blob, g, psm, true); }catch(_){ continue; }
         for(const m of t.replace(/(\d)[ \-.](?=\d)/g, '$1').match(new RegExp('\\d{' + (digitos - 1) + ',}', 'g')) || []) if(m.length === digitos - 1) parciales.add(m);
         const c = candidatosTarjeta(t, digitos);
         for(const x of c){ votos[x.n] = (votos[x.n] || 0) + (x.exacto ? 2 : 1); if(!primero) primero = x.n; }
