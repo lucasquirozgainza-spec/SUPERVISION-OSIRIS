@@ -387,8 +387,8 @@ if(typeof module !== 'undefined') module.exports = {OCR};
 /* ===================== OSIRIS GUARDIA (web para iPhone) =====================
    Registra en la MISMA nube y con el MISMO formato que la app Android: el monitor,
    los informes, las horas y los demás celulares lo ven igual. */
-const SB_URL = 'https://idwsbukgtogiwvfrurlc.supabase.co';
-const SB_KEY = 'sb_publishable_-uuIV9H6rYYWjhyGNNtQww_0oww_OyF';
+const SB_URL = 'https://sxyxklzgjukokgvmxiif.supabase.co';
+const SB_KEY = 'sb_publishable_1sl0nTk6US5BygdM-_Zd0w_SIlGcLpp';
 const MON = '__monitor__';
 const $ = s => document.querySelector(s);
 const enc = encodeURIComponent;
@@ -475,7 +475,7 @@ function tomarFoto(frontal){
     inp.click();
   });
 }
-async function reducir(file, max = 1920, q = 0.82){
+async function reducir(file, max = 1600, q = 0.74){   /* ~200 KB por foto (antes ~400 KB) */
   const url = URL.createObjectURL(file);
   try{
     const img = await new Promise((s, m) => { const i = new Image(); i.onload = () => s(i); i.onerror = m; i.src = url; });
@@ -548,7 +548,8 @@ async function procesarCola(){
         await quitar(it);
       }catch(e){
         const s = e.status || 0;
-        if(s >= 400 && s < 500 && ![401, 403, 408, 409, 429].includes(s)){ await quitar(it); continue; } // rechazo definitivo
+        /* rechazo definitivo SOLO si el dato es inválido. 402 (nube suspendida por cuota), 401/403, 408, 429 y 5xx: se guarda y se reintenta */
+        if([400, 413, 415, 422].includes(s)){ await quitar(it); continue; }
         if(s === 409){ await quitar(it); continue; }
         await guardarItem(it);
         break; // sin señal: se reintenta luego
@@ -678,6 +679,7 @@ function ir(pantalla, ...args){
 }
 function quitarPantalla(){ G.pila.pop(); if(!G.pila.length) G.pila.push([inicio, []]); pintar(); scrollTo({top:0}); }
 function volver(){
+  if(typeof gpsParar === 'function') gpsParar();
   if(HIST > 0){ try{ history.back(); return; }catch(_){} }
   quitarPantalla();
 }
@@ -729,6 +731,30 @@ $('#main').addEventListener('click', e => {
 /* ---------- Componente: fotos ---------- */
 /* Cámara dentro de la página: se toman varias fotos seguidas sin salir (si el
    navegador no deja usarla, se usa la cámara del sistema de a una). */
+/* Ronda: hora y ubicación de cada foto (la foto queda en el celular; a la nube va solo esto) */
+const GPS = {ult:null, ruta:[], id:null, inicio:0};
+function marcarFoto(b){ try{ b._t = Date.now(); b._gps = GPS.ult && Date.now() - GPS.ult.t < 120000 ? {...GPS.ult} : null; }catch(_){} }
+function gpsIniciar(){
+  gpsParar();
+  GPS.ruta = []; GPS.ult = null; GPS.inicio = Date.now();
+  if(!navigator.geolocation) return;
+  try{
+    GPS.id = navigator.geolocation.watchPosition(p => {
+      const x = {lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), prec: Math.round(p.coords.accuracy || 0), t: Date.now()};
+      GPS.ult = x; if(GPS.ruta.length < 3000) GPS.ruta.push(x);
+    }, () => {}, {enableHighAccuracy: true, maximumAge: 5000, timeout: 20000});
+  }catch(_){}
+}
+function gpsParar(){ try{ if(GPS.id !== null) navigator.geolocation.clearWatch(GPS.id); }catch(_){} GPS.id = null; }
+function metros(a, b){ const R = 6371000, r = x => x * Math.PI / 180; const dLa = r(b.lat - a.lat), dLo = r(b.lng - a.lng);
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); }
+function rutaCompacta(){
+  const r = GPS.ruta, paso = Math.max(1, Math.ceil(r.length / 120)), out = [];
+  for(let i = 0; i < r.length; i += paso) out.push([r[i].lat, r[i].lng, Math.round((r[i].t - GPS.inicio) / 1000)]);
+  const u = r[r.length - 1]; if(u && (!out.length || out[out.length - 1][2] !== Math.round((u.t - GPS.inicio) / 1000))) out.push([u.lat, u.lng, Math.round((u.t - GPS.inicio) / 1000)]);
+  return out;
+}
+function metrosRecorridos(){ let m = 0; for(let i = 1; i < GPS.ruta.length; i++){ const d = metros(GPS.ruta[i - 1], GPS.ruta[i]); if(d < 200) m += d; } return Math.round(m); }
 async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo = 'Foto', guia = ''} = {}){
   let stream = null;
   try{
@@ -738,7 +764,7 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
   if(!stream){
     const out = [];
     while(out.length < max){
-      const b = await tomarFoto(frontal); if(!b) break; out.push(b);
+      const b = await tomarFoto(frontal); if(!b) break; marcarFoto(b); out.push(b);
       if(out.length >= max || (out.length >= min && !confirm('Foto ' + out.length + ' guardada. ¿Sacar otra?'))) break;
     }
     return out;
@@ -767,7 +793,7 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
         const mx = gr.width * 0.06, my = gr.height * 0.08;
         let sx = (gr.left - vr.left - mx - ox) / s, sy = (gr.top - vr.top - my - oy) / s, sw = (gr.width + 2 * mx) / s, sh = (gr.height + 2 * my) / s;
         sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(w - sx, sw); sh = Math.min(h - sy, sh);
-        const k = Math.min(1800, Math.max(1400, sw)) / sw;
+        const k = Math.min(1600, Math.max(1200, sw)) / sw;
         c.width = Math.round(sw * k); c.height = Math.round(sh * k);
         c.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
       } else {
@@ -776,8 +802,8 @@ async function camara({min = 1, max = 1, frontal = false, etiquetas = [], titulo
         c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
       }
       const f = $('#camFlash'); f.style.opacity = .8; setTimeout(() => f.style.opacity = 0, 120);
-      const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
-      if(b){ fotos.push(b); if(navigator.vibrate) navigator.vibrate(30); }
+      const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.78));
+      if(b){ marcarFoto(b); fotos.push(b); if(navigator.vibrate) navigator.vibrate(30); }
       if(fotos.length >= max) return cerrar();
       pintarC();
     };
@@ -1156,6 +1182,7 @@ async function fotoConFranja(blob, lineas){
 }
 function pRonda(){
   cabecera();
+  gpsIniciar();
   const min = Math.max(1, parseInt(G.link.ronda_fotos, 10) || 4);
   $('#main').innerHTML = `<div class="card">
     <div class="field"><span>Fotos de la ronda (mínimo ${min})</span><div class="zf" id="rF"></div></div>
@@ -1191,7 +1218,11 @@ function pRonda(){
       return null;
     };
     const compartir = listo ? enviar(listo) : null;
-    const guardado = registrar('Ronda', {fotos: z.fotos.length, ...(obs ? {observaciones: obs} : {}), ts: ahora.toISOString()}, {fotos: z.fotos.slice(0, 6), campoFotos: 'fotos_url'});
+    /* a la nube va solo el registro; las fotos quedan en el celular (se comparten o se guardan desde "Compartir") */
+    const fotosGps = z.fotos.map((b, i) => ({n: i + 1, ...(b._t ? {t: new Date(b._t).toISOString()} : {}), ...(b._gps ? {lat: b._gps.lat, lng: b._gps.lng, prec: b._gps.prec} : {})}));
+    const guardado = registrar('Ronda', {fotos: z.fotos.length, fotos_en: 'celular', ...(obs ? {observaciones: obs} : {}), ts: ahora.toISOString(),
+      fotos_gps: fotosGps, ruta: rutaCompacta(), ruta_inicio: new Date(GPS.inicio).toISOString(), recorrido_m: metrosRecorridos()});
+    gpsParar();
     if(compartir) await compartir.catch(() => {});
     await guardado;
     toast('Ronda guardada', 'var(--ok)');

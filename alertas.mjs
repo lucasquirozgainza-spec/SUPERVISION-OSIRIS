@@ -8,8 +8,8 @@
 //    guardia escribe (para confirmarlo en el monitor).
 // Cada aviso se manda una sola vez (queda anotado en la nube).
 
-const SB = process.env.SB_URL || 'https://idwsbukgtogiwvfrurlc.supabase.co';
-const KEY = process.env.SB_KEY || 'sb_publishable_-uuIV9H6rYYWjhyGNNtQww_0oww_OyF';
+const SB = process.env.SB_URL || 'https://sxyxklzgjukokgvmxiif.supabase.co';
+const KEY = process.env.SB_KEY || 'sb_publishable_1sl0nTk6US5BygdM-_Zd0w_SIlGcLpp';
 const FORM = process.env.FORM_TOKEN || '3b28ce9c5e25dfe592b336c8d4829a54';
 const SITIO = process.env.SITIO || 'https://osirissecurity.com.bo/';
 const MARGEN_MIN = 30;
