@@ -243,7 +243,7 @@ const OCR = (() => {
     return suelto;
   }
   function ciEtiqueta(texto){
-    const m = /\bN(?:RO|O|°|º|\.)?\s*[°º.:]?\s*([0-9OILSB]{5,11})(?![0-9])/.exec(texto.toUpperCase()); if(!m) return null;
+    const m = /(?:^|[^A-ZÁÉÍÓÚÑÜ0-9])N(?:RO|O|°|º|\.)?\s*[°º.:]?\s*([0-9OILSB]{5,11})(?![0-9])/.exec(texto.toUpperCase()); if(!m) return null;
     const raw = m[1].replace(/[^0-9]+$/, '');
     if(raw.length < 5 || raw.length > 9) return null;
     if(raw.replace(/[^0-9]/g, '').length < raw.length * 0.75) return null;
@@ -329,8 +329,20 @@ const OCR = (() => {
     if(a.length === b.length && a.every((w, k) => b[k].startsWith(w))) return et;
     return mrz;
   }
+  /* carnet nuevo: los números de SERIE y SECCIÓN no son el CI (se veían como CI en fotos reales) */
+  function sinSerie(texto){
+    const out = []; let saltar = 0;
+    for(const l of String(texto || '').split('\n')){
+      const u = l.toUpperCase();
+      if(/SERIE|SECCI/.test(u)){ saltar = /\d{4,}/.test(u) ? 0 : 1; continue; }
+      if(saltar > 0){ saltar--; if(/^[\s\dOIl:.]+$/.test(l)) continue; }
+      out.push(l);
+    }
+    return out.join('\n');
+  }
   function parseDosLados(frente, reverso){
-    const ci = ciMrz(frente) || ciMrz(reverso) || ciEtiqueta(frente) || ciEtiqueta(reverso) || ciSuelto(frente);
+    const fr = sinSerie(frente), rv = sinSerie(reverso);
+    const ci = ciMrz(frente) || ciMrz(reverso) || ciEtiqueta(fr) || ciEtiqueta(rv) || ciSuelto(fr);
     const mrz = nombreMrz(frente) || nombreMrz(reverso);
     const et = nombreEtiquetas(frente) || nombreEtiquetas(reverso);
     const nombre = mejorNombre(mrz, et) || nombreAntiguo(reverso) || nombreAntiguo(frente);
@@ -353,6 +365,18 @@ const OCR = (() => {
       }
     }
     return out;
+  }
+  /* tarjetas ya registradas en el edificio: si lo leído difiere en 1 dígito (o le falta 1) de una sola, es esa */
+  function ajustarAConocida(n, conocidas, digitos){
+    const ks = [...new Set((conocidas || []).filter(k => k && k.length === digitos))];
+    if(!n) return null;
+    if(ks.includes(n)) return n;
+    if(n.length === digitos){
+      const cerca = ks.filter(k => { let d = 0; for(let i = 0; i < k.length && d < 2; i++) if(k[i] !== n[i]) d++; return d === 1; });
+      return cerca.length === 1 ? cerca[0] : null;
+    }
+    if(n.length === digitos - 1){ const op = ks.filter(k => k.startsWith(n) || k.endsWith(n)); return op.length === 1 ? op[0] : null; }
+    return null;
   }
   function numeroTarjeta(texto, digitos){
     const c = candidatosTarjeta(texto, digitos);
@@ -421,7 +445,7 @@ const OCR = (() => {
   });
   const enFila = fn => { const p = fila.then(() => conTope(fn(), 90000), () => conTope(fn(), 90000)); fila = p.catch(() => {}); return p; };
   return {
-    parseDosLados, numeroTarjeta, ciMrz, mejorNombre, precargar: () => motor().catch(() => null), listo: () => !!worker,
+    parseDosLados, numeroTarjeta, ciMrz, mejorNombre, sinSerie, ajustarAConocida, precargar: () => motor().catch(() => null), listo: () => !!worker,
     carnet: (frente, reverso) => enFila(async () => {
       const a = await lado(frente), b = reverso ? await lado(reverso) : '';
       /* por si sacaron primero el reverso: se prueba también al revés */
@@ -429,17 +453,22 @@ const OCR = (() => {
       return {ci: r1.ci || r2.ci || null, nombre: r1.nombre || r2.nombre || null, textos: [a, b].filter(Boolean)};
     }),
     /* varias pasadas; si dos coinciden se acepta; si no, la que salió exacta */
-    tarjeta: (blob, digitos) => enFila(async () => {
-      const votos = {}; let primero = null;
-      for(const [g, psm] of [[0, '3'], [0, '11'], [0, '7'], [90, '3'], [270, '3']]){
+    tarjeta: (blob, digitos, conocidas) => enFila(async () => {
+      const votos = {}, parciales = new Set(); let primero = null;
+      /* en fotos reales el número suele ir impreso de costado: 270° con texto disperso (psm 11) fue lo que mejor leyó */
+      for(const [g, psm] of [[0, '3'], [270, '11'], [90, '11'], [0, '11'], [270, '3'], [90, '3']]){
         let t = ''; try{ t = await texto(blob, g, psm); }catch(_){ continue; }
+        for(const m of t.replace(/(\d)[ \-.](?=\d)/g, '$1').match(new RegExp('\\d{' + (digitos - 1) + ',}', 'g')) || []) if(m.length === digitos - 1) parciales.add(m);
         const c = candidatosTarjeta(t, digitos);
         for(const x of c){ votos[x.n] = (votos[x.n] || 0) + (x.exacto ? 2 : 1); if(!primero) primero = x.n; }
         const top = Object.entries(votos).sort((a, b) => b[1] - a[1])[0];
-        if(top && top[1] >= 3) return top[0];
+        if(top && top[1] >= 3) return ajustarAConocida(top[0], conocidas, digitos) || top[0];
       }
       const top = Object.entries(votos).sort((a, b) => b[1] - a[1])[0];
-      return top ? top[0] : primero;
+      const n = top ? top[0] : primero;
+      if(n) return ajustarAConocida(n, conocidas, digitos) || n;
+      for(const p of parciales){ const k = ajustarAConocida(p, conocidas, digitos); if(k) return k; }
+      return null;
     }),
   };
 })();
@@ -1026,6 +1055,17 @@ function firmaPad(cv){
   };
 }
 
+/* Tarjetas ya registradas en el edificio: ayudan a corregir la lectura (un dígito mal leído o faltante) */
+let TARJ = null;
+async function tarjetasConocidas(){
+  if(TARJ && Date.now() - TARJ.t < 600000) return TARJ.l;
+  try{
+    const r = await api('eventos?select=t:detalle->>tarjeta&edificio=eq.' + enc(G.ed) + '&tipo=eq.Visita&detalle->>tarjeta=neq.&order=created_at.desc&limit=1000');
+    TARJ = {t: Date.now(), l: [...new Set(r.map(x => String(x.t || '').trim()).filter(x => /^\d+$/.test(x)))]};
+  }catch(_){ TARJ = TARJ || {t: 0, l: []}; }
+  return TARJ.l;
+}
+
 /* ---------- Visitas ---------- */
 async function visitasDentro(){
   const desde = new Date(Date.now() - 3 * 864e5).toISOString();
@@ -1114,7 +1154,7 @@ async function leerTarjeta(foto, idEst, idNum){
   if(!foto){ est.textContent = ''; return; }
   est.className = 'ocrst'; est.textContent = 'Leyendo el número…';
   try{
-    const n = await OCR.tarjeta(foto, digitos());
+    const n = await OCR.tarjeta(foto, digitos(), await tarjetasConocidas());
     if(!$('#' + idEst)) return;
     const i = $('#' + idNum);
     if(n && i){ i.value = n; est.className = 'ocrst ok'; est.textContent = 'N° leído: ' + n + '. Revisa que esté bien.'; }
@@ -1183,7 +1223,7 @@ async function pRecurrentes(){
     if(campo('v_tarjeta') && confirm('¿Le entregas una tarjeta de acceso a ' + x.nombre + '?')){
       fotos = await camara({max: 1, titulo: 'Tarjeta de acceso', guia: 'tarjeta'});
       let leido = '';
-      if(fotos.length){ toast('Leyendo el número…'); try{ leido = await OCR.tarjeta(fotos[0], digitos()) || ''; }catch(_){} }
+      if(fotos.length){ toast('Leyendo el número…'); try{ leido = await OCR.tarjeta(fotos[0], digitos(), await tarjetasConocidas()) || ''; }catch(_){} }
       const r = prompt('N° de la tarjeta (' + digitos() + ' dígitos):' + (leido ? '\nLeído de la foto, revisa que esté bien.' : ''), leido);
       if(r === null) return;
       tarjeta = r.trim();
