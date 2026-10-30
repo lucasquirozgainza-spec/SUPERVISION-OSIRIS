@@ -165,6 +165,34 @@ async function revisarSolicitudes(enviados){
   return out;
 }
 
+/* Respaldo del mes y espacio de fotos (1 GB gratis) */
+async function listarFotos(prefix){
+  const out = [];
+  for(let off = 0; off < 200000; off += 1000){
+    const r = await fetch(`${SB}/storage/v1/object/list/osiris`, {method: 'POST', headers: H, body: JSON.stringify({prefix, limit: 1000, offset: off})});
+    if(!r.ok) throw new Error('storage ' + r.status);
+    const pg = await r.json(); out.push(...pg); if(pg.length < 1000) break;
+  }
+  return out;
+}
+async function revisarRespaldo(enviados){
+  const out = [], l = local(AHORA);
+  const ant = new Date(Date.UTC(l.getUTCFullYear(), l.getUTCMonth() - 1, 1));
+  const mesAnt = ant.getUTCFullYear() + '-' + String(ant.getUTCMonth() + 1).padStart(2, '0');
+  const marcas = await api(`eventos?select=detalle&tipo=eq.Config&edificio=eq.__monitor__&detalle->>clase=eq.respaldo&limit=500`);
+  const hechos = new Set(marcas.map(e => det(e).mes));
+  if(l.getUTCDate() <= 3 && !hechos.has(mesAnt) && !enviados.has('respaldo|' + mesAnt))
+    out.push({clave: 'respaldo|' + mesAnt, asunto: `Osiris · Descarga el respaldo de ${mesAnt}`, texto: `Terminó el mes ${mesAnt}. En el monitor: Ajustes > Respaldo y espacio > Descargar, y súbelo a tu Google Drive. Después puedes liberar el espacio de las fotos de ese mes.`});
+  const raiz = await listarFotos('');
+  let bytes = 0;
+  for(const c of raiz.filter(x => !x.id)) for(const x of await listarFotos(c.name + '/')) bytes += +(x.metadata && x.metadata.size) || 0;
+  for(const x of raiz.filter(x => x.id)) bytes += +(x.metadata && x.metadata.size) || 0;
+  const pct = bytes / (1024 ** 3) * 100, sem = 'espacio|' + l.toISOString().slice(0, 8) + (l.getUTCDate() <= 15 ? 'a' : 'b');
+  if(pct >= 80 && !enviados.has(sem))
+    out.push({clave: sem, asunto: `Osiris · Fotos en la nube al ${Math.round(pct)}%`, texto: `Las fotos ocupan ${(bytes / 1048576).toFixed(0)} MB de 1 GB. Descarga el respaldo del mes más antiguo y usa "Liberar" en Ajustes > Respaldo y espacio.`});
+  return out;
+}
+
 (async () => {
   const cfg = await api(`eventos?select=edificio,detalle,created_at&tipo=eq.Config&edificio=neq.__monitor__&order=created_at.desc&limit=2000`);
   const ultima = new Map();
@@ -187,5 +215,10 @@ async function revisarSolicitudes(enviados){
       if(await correo(a.asunto, a.texto)){ await anotar(a.clave, a.texto); enviados.add(a.clave); total++; }
     }
   }catch(x){ console.error('solicitudes', x.message); }
+  try{
+    for(const a of await revisarRespaldo(enviados)){
+      if(await correo(a.asunto, a.texto)){ await anotar(a.clave, a.texto); enviados.add(a.clave); total++; }
+    }
+  }catch(x){ console.error('respaldo', x.message); }
   console.log(`Listo · ${total} aviso(s) · ${AHORA.toISOString()}`);
 })().catch(e => { console.error(e); process.exit(1); });
