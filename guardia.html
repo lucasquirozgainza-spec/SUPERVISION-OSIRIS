@@ -847,7 +847,9 @@ function inicio(){
   if(modOn('encomiendas')) tile('encom', 'paquete', '#a16207', 'Encomiendas', 'Llegada y entrega');
   if(modOn('hospedajes')) tile('hosp', 'cama', '#0d9488', 'Hospedajes', 'Ingreso y salida');
   tile('hist', 'hist', '#455a64', 'Historial', 'Visitas, rondas, turnos');
-  tile('sol', 'pedido', '#6d4c41', 'Solicitudes', 'Adelanto y día libre');
+  tile('adel', 'pedido', '#6d4c41', 'Adelanto', 'Pedir adelanto');
+  tile('libre', 'reloj', '#00695c', 'Día libre', 'Pedir día libre');
+  tile('sol', 'libro', '#5d4037', 'Mis pedidos', 'Respuestas de supervisión');
   if(optLink('mod', 'consultas') !== undefined ? optLink('mod', 'consultas') === true : (modOn('propietarios') || modOn('vehiculos') || modOn('normativas'))) tile('consultas', 'libro', '#37474f', 'Consultas', 'Propietarios, vehículos…');
   $('#main').innerHTML = `
     <div class="card turnoBox"><span class="tile" style="border:0;padding:0;min-height:0;background:none"><span class="ic" style="background:${G.turno ? 'var(--ok)' : 'var(--mute)'}">${icono(G.turno ? 'ingreso' : 'reloj')}</span></span>
@@ -857,7 +859,7 @@ function inicio(){
 }
 $('#main').addEventListener('click', e => {
   const b = e.target.closest('[data-ir]'); if(!b) return;
-  const P = {turno: pTurno, visitas: pVisitas, recu: pRecurrentes, ronda: pRonda, incidente: pIncidente, encom: pEncomiendas, hosp: pHospedajes, consultas: pConsultas, hist: pHistorial, sol: pSolicitudes};
+  const P = {turno: pTurno, visitas: pVisitas, recu: pRecurrentes, ronda: pRonda, incidente: pIncidente, encom: pEncomiendas, hosp: pHospedajes, consultas: pConsultas, hist: pHistorial, sol: pSolicitudes, adel: () => pPedir('adelanto'), libre: () => pPedir('libre')};
   if(P[b.dataset.ir]){
     if(!['turno', 'consultas', 'hist'].includes(b.dataset.ir) && !G.turno){ toast('Primero marca tu ingreso de turno', 'var(--warn)'); return ir(pTurno); }
     ir(P[b.dataset.ir]);
@@ -1682,7 +1684,7 @@ function estadoSol(x){
     case 'por_confirmar': return ['Monto enviado (Bs ' + bsTxt(x.montoGuardia) + '): falta que supervisión lo confirme', 'var(--warn)'];
     case 'confirmado': return ['Confirmado: Bs ' + bsTxt(x.montoFinal != null ? x.montoFinal : x.montoGuardia), 'var(--ok)'];
     case 'no_entregado': return ['Supervisión no confirmó este adelanto', 'var(--bad)'];
-    default: return [x.enviado ? 'Esperando respuesta de supervisión' : 'Por enviar (se envía al volver la señal)', 'var(--mute)'];
+    default: return [x.enviado ? 'Esperando respuesta: tendrás respuesta en las próximas 6 horas hábiles' : 'Por enviar (se envía al volver la señal)', 'var(--warn)'];
   }
 }
 function pSolicitudes(){
@@ -1714,7 +1716,7 @@ function pSolicitudes(){
 }
 function pPedir(clase){
   cabecera();
-  const adel = clase === 'adelanto', hoy = ymdLocal(new Date()), manana = ymdLocal(new Date(Date.now() + 864e5));
+  const adel = clase === 'adelanto', hoy = ymdLocal(new Date(Date.now() + (adel ? 1 : 2) * 864e5)), manana = hoy;
   $('#main').innerHTML = `<div class="card"><b style="font-size:17px">${adel ? 'Pedir adelanto' : 'Pedir día libre'}</b>
     ${adel ? `<div class="field"><span>Monto (Bs) *</span><input id="pM" type="number" inputmode="decimal" min="1" step="any" autocomplete="off"></div>` : ''}
     <div class="field"><span>${adel ? 'Para qué día lo necesitas' : 'Día libre que pides'} *</span><input id="pF" type="date" min="${hoy}" value="${adel ? hoy : manana}"></div>
@@ -1729,7 +1731,8 @@ function pPedir(clase){
     ocupado($('#pOk'), true, 'Enviando…');
     const sid = 'web_' + G.devId + '_' + Date.now() + '_' + azar(4);
     await registrar('Solicitud', adel ? {clase: 'adelanto', sid, motivo, fecha, monto_pedido: monto} : {clase: 'libre', sid, fecha, motivo});
-    toast('Pedido enviado a supervisión', 'var(--ok)'); volver();
+    bloqueo(`<h2 style="margin-bottom:4px">Esperando respuesta</h2><p style="color:var(--mute);margin-top:0">Tu pedido de ${adel ? 'adelanto' : 'día libre'} se envió a supervisión. Tendrás respuesta en las próximas 6 horas hábiles; la verás en <b>Mis pedidos</b>.</p><button class="btn prim" id="okPed">Entendido</button>`);
+    $('#okPed').onclick = () => { $('#lock').hidden = true; G.pila[G.pila.length - 1] = [pSolicitudes, []]; pintar(); };
   };
 }
 

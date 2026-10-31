@@ -4290,13 +4290,16 @@ async function datosDepto(depto){
 function formVehiculo(i){
   const D = ED.datos.vehiculos, f = i === null ? {} : D.filas[i], nuevo = i === null;
   let nom = String(f.propietario || ''), de = 'propietario';
+  const TIPOS = ['Auto', 'Moto', 'Camioneta', 'Otro'];
+  let tipo = TIPOS.find(t => String(f.vehiculo || '').startsWith(t)) || 'Auto';
   const m = / \((inquilino|otro)\)$/.exec(nom); if(m){ de = m[1]; nom = nom.slice(0, -m[0].length); }
   const campo = (k, t, extra = '') => `<label class="field"><span>${t}</span><input id="v_${k}" value="${esc(f[k] || '')}" autocomplete="off" ${extra}></label>`;
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
     <h2>${nuevo ? 'Vehículo' : 'Editar vehículo'}</h2><div class="sub">${esc(D.ed)}</div>
     <div class="dos">${campo('nro_parqueo', 'N° parqueo')}${campo('depto', 'Depto.')}</div>
-    <div class="seg" id="vDe" style="display:flex;gap:6px;margin:4px 0 8px">${['propietario','inquilino','otro'].map(k => `<button class="btn ${de === k ? 'prim' : ''}" data-de="${k}" style="flex:1">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
+    <div class="seg" id="vDe" style="display:flex;gap:6px;margin:4px 0 8px">${['propietario','inquilino','otro'].map(k => `<button class="btn ${de === k ? 'prim' : ''}" data-de="${k}" style="flex:1;padding:0 4px;font-size:14px">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
     <div class="dos"><label class="field"><span>Nombre</span><input id="v_nombre" value="${esc(nom)}" autocomplete="off"></label>${campo('telefono', 'Teléfono', 'inputmode="tel"')}</div>
+    <div class="seg" id="vTipo" style="display:flex;gap:6px;margin:4px 0 8px">${TIPOS.map(k => `<button class="btn ${tipo === k ? 'prim' : ''}" data-tipo="${k}" style="flex:1;padding:0 4px;font-size:14px">${k}</button>`).join('')}</div>
     ${campo('placa', 'Placa', 'style="text-transform:uppercase"')}
     <div class="dos">${campo('marca', 'Marca')}${campo('modelo', 'Modelo')}</div>
     <div class="dos">${campo('color', 'Color')}${campo('observaciones', 'Observaciones')}</div>
@@ -4309,14 +4312,19 @@ function formVehiculo(i){
   $('#vDe').onclick = e => { const b = e.target.closest('[data-de]'); if(!b) return; de = b.dataset.de;
     $('#vDe').querySelectorAll('[data-de]').forEach(x => x.classList.toggle('prim', x === b)); llenar(); };
   $('#v_depto').onchange = llenar;
+  $('#vTipo').onclick = e => { const b = e.target.closest('[data-tipo]'); if(!b) return; tipo = b.dataset.tipo;
+    $('#vTipo').querySelectorAll('[data-tipo]').forEach(x => x.classList.toggle('prim', x === b)); };
   $('#fOk').onclick = () => {
     const nf = {...f};
     for(const k of ['nro_parqueo','depto','telefono','marca','modelo','color','observaciones']){ const v = $('#v_' + k).value.trim(); if(v) nf[k] = v; else delete nf[k]; }
     const placa = $('#v_placa').value.trim().toUpperCase(); if(placa) nf.placa = placa; else delete nf.placa;
     const n = $('#v_nombre').value.trim(); if(n) nf.propietario = de === 'propietario' ? n : n + ' (' + de + ')'; else delete nf.propietario;
-    if(nf.marca || nf.modelo) nf.vehiculo = [nf.marca, nf.modelo].filter(Boolean).join(' ');
+    nf.vehiculo = [tipo, nf.marca, nf.modelo].filter(Boolean).join(' ');
     if(!nf.placa && !nf.depto) return $('#fMsg').innerHTML = '<div class="msg bad">Escribe la placa o el depto.</div>';
-    if(nuevo) D.filas.push(nf); else D.filas[i] = nf;
+    /* un parqueo cargado sin vehículo se completa; si ya tiene vehículo, este va aparte (auto y moto en el mismo parqueo) */
+    const vacio = nuevo && nf.nro_parqueo ? D.filas.findIndex(x => !x.placa && String(x.nro_parqueo || '') === nf.nro_parqueo && String(x.depto || '').toUpperCase() === String(nf.depto || '').toUpperCase()) : -1;
+    if(vacio >= 0) D.filas[vacio] = {...D.filas[vacio], ...nf};
+    else if(nuevo) D.filas.push(nf); else D.filas[i] = nf;
     marcarSucio('vehiculos'); $('#sheet').classList.remove('on'); pintarEdificio();
   };
   if($('#fDel')) $('#fDel').onclick = () => { if(!confirm('¿Eliminar este vehículo?')) return; D.filas.splice(i, 1); marcarSucio('vehiculos'); $('#sheet').classList.remove('on'); pintarEdificio(); };
