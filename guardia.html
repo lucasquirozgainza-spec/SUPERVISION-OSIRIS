@@ -1733,6 +1733,43 @@ function pPedir(clase){
   };
 }
 
+/* ---------- Recordatorio de ronda (con la página abierta) ----------
+   El navegador del iPhone no recibe avisos con la página cerrada: mientras está
+   abierta, cuando toca la ronda (cada X h desde la última, en el horario que
+   define supervisión) suena, vibra y aparece un aviso. */
+const minHM = x => /^\d\d:\d\d$/.test(x || '') ? +x.slice(0, 2) * 60 + +x.slice(3) : -1;
+function enHorarioRonda(t){
+  const d = minHM(G.mod.ronda_rec_desde), h = minHM(G.mod.ronda_rec_hasta);
+  if(d < 0 || h < 0 || d === h) return true;
+  const x = t.getHours() * 60 + t.getMinutes();
+  return d < h ? (x >= d && x < h) : (x >= d || x < h);
+}
+let RONDA_AVISO = '';
+async function revisarRonda(){
+  if(!G.turno || !modOn('rondas') || G.mod.ronda_rec === false) return;
+  const cada = Math.min(12, Math.max(1, parseInt(G.mod.ronda_cada, 10) || 2));
+  const ini = new Date(G.turno.inicio);
+  let ult = ini;
+  try{
+    const r = [...await api('eventos?select=created_at,detalle&tipo=eq.Ronda&edificio=eq.' + enc(G.ed) + '&created_at=gte.' + enc(new Date(+ini - 3600e3).toISOString()) + '&order=created_at.desc&limit=20'),
+      ...await pendientesComoEventos(['Ronda'])].filter(e => !G.link.bloque || !detalleDe(e).bloque || detalleDe(e).bloque === G.link.bloque);
+    for(const e of r){ const t = horaReal(e); if(t > ult) ult = t; }
+  }catch(_){ return; }
+  const toca = new Date(+ult + cada * 3600e3), ahora = new Date();
+  if(ahora < toca || !enHorarioRonda(ahora) || RONDA_AVISO === toca.toISOString()) return;
+  RONDA_AVISO = toca.toISOString();
+  try{ navigator.vibrate && navigator.vibrate([600, 300, 600, 300, 600]); }catch(_){}
+  try{
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.45, 0.9].forEach(t0 => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(0.25, ac.currentTime + t0); o.start(ac.currentTime + t0); o.stop(ac.currentTime + t0 + 0.3); });
+  }catch(_){}
+  bloqueo(`<h2 style="margin-bottom:4px">Ronda pendiente</h2><p style="color:var(--mute);margin-top:0">Es hora de hacer la ronda (cada ${cada} h). Sin ronda desde las ${esc(hm(ult))}.</p>
+    <button class="btn prim" id="rAhora">Hacer la ronda</button><button class="btn" id="rLuego" style="width:100%;margin-top:8px">Más tarde</button>`);
+  $('#rAhora').onclick = () => { $('#lock').hidden = true; ir(pRonda); };
+  $('#rLuego').onclick = () => { $('#lock').hidden = true; };
+}
+
 /* ---------- Arranque ---------- */
 (async function(){
   $('#logo').src = LOGO_OSIRIS;
@@ -1745,6 +1782,7 @@ function pPedir(clase){
   G.pila = [[inicio, []]]; pintar();
   procesarCola(); pintarSync();
   latido(); setInterval(latido, 60000);
+  setTimeout(revisarRonda, 5000); setInterval(revisarRonda, 60000);
   document.addEventListener('visibilitychange', () => { if(!document.hidden) latido(); });
   /* si supervisión desactiva el link o cierra las sesiones, se bloquea */
   setInterval(async () => {

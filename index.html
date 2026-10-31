@@ -754,6 +754,7 @@ html{overscroll-behavior-y:none}
   <section class="vista" id="v-edi" hidden></section>
   <section class="vista" id="v-cfg" hidden></section>
   <section class="vista" id="v-cob" hidden></section>
+  <section class="vista" id="v-noc" hidden></section>
 </main>
 
 <nav class="bnav" id="bnav" hidden>
@@ -3835,8 +3836,8 @@ async function rspVerItem(i){
 /* ===================== EDIFICIO: ajustes, celulares y datos (solo supervisión) ===================== */
 const ED = {sub:'ajustes', gen:0, cfg:null, datos:{}, sucio:{}, filtro:'', editIdx:null};
 const SUBS = [
-  ['ajustes','Funciones y turnos'], ['celulares','Celulares'], ['propietarios','Propietarios'], ['residentes','Residentes'],
-  ['vehiculos','Vehículos'], ['contactos','Contactos'], ['recurrentes','Recurrentes'], ['normativas','Reglamentos'], ['puntos_control','Puntos de ronda'],
+  ['ajustes','Funciones y turnos'], ['celulares','Celulares'], ['propietarios','Propietarios e inquilinos'], ['residentes','Residentes'],
+  ['vehiculos','Vehículos y parqueos'], ['contactos','Contactos'], ['recurrentes','Recurrentes'], ['normativas','Reglamentos'], ['puntos_control','Puntos de ronda'],
 ];
 const MODULOS = [['visitas','Visitas'],['visitas_recu','Visitas recurrentes'],['hospedajes','Hospedajes'],['rondas','Rondas'],
   ['propietarios','Propietarios'],['vehiculos','Vehículos'],['incidentes','Incidentes'],['encomiendas','Encomiendas'],
@@ -3848,15 +3849,14 @@ const LISTAS = {
     ['depto','Depto.',['depto','departa','unidad','dpto']], ['torre','Torre / bloque',['torre','bloque']],
     ['copropietario','Propietario',['copropietario','propietario','nombre','duen']], ['telefono','Teléfono',['telefono','celular','whatsapp','telf','cel']],
     ['inquilino','Inquilino',['inquilino']], ['telefono_inq','Teléfono inquilino',['tel inq','cel inq','telefono inq','telf inq','telefono del inq']],
-    ['nro_parqueo','N° parqueo',['parqueo','garaje','estacionamiento']], ['vehiculo','Vehículo',['vehiculo','auto','movil']], ['placa','Placa',['placa']],
     ['mascota','Mascota',['mascota']], ['nombre_mascota','Nombre de la mascota',['nombre mascota','nombre de la mascota']], ['observaciones','Observaciones',['observ','nota','coment']]]},
   residentes:{t:'Residentes', principal:['depto','nombre'], excel:true, cols:[
     ['depto','Depto.',['depto','departa','unidad','dpto']], ['nombre','Nombre',['nombre','residente']], ['parentesco','Parentesco',['parentesco','relacion','vinculo']],
     ['celular','Celular',['celular','telefono','cel','telf','whatsapp']], ['observaciones','Observaciones',['observ','nota']]]},
   vehiculos:{t:'Vehículos', principal:['placa','depto'], excel:true, cols:[
-    ['placa','Placa',['placa']], ['depto','Depto.',['depto','departa','unidad','dpto']], ['propietario','Propietario',['propietario','dueno','nombre']],
-    ['vehiculo','Vehículo',['vehiculo','tipo']], ['marca','Marca',['marca']], ['modelo','Modelo',['modelo']], ['color','Color',['color']],
-    ['nro_parqueo','N° parqueo',['parqueo','garaje','estacionamiento']], ['telefono','Teléfono',['telefono','celular','cel','telf']], ['observaciones','Observaciones',['observ','nota']]]},
+    ['nro_parqueo','N° parqueo',['parqueo','garaje','estacionamiento']], ['depto','Depto.',['depto','departa','unidad','dpto']], ['propietario','De',['propietario','dueno','nombre']],
+    ['telefono','Teléfono',['telefono','celular','cel','telf']], ['placa','Placa',['placa']], ['vehiculo','Vehículo',['vehiculo','tipo']], ['marca','Marca',['marca']],
+    ['modelo','Modelo',['modelo']], ['color','Color',['color']], ['observaciones','Observaciones',['observ','nota']]]},
   contactos:{t:'Contactos', principal:['nombre','telefono'], excel:true, cols:[['nombre','Nombre',['nombre','contacto','servicio']], ['telefono','Teléfono',['telefono','celular','numero','cel','telf']]]},
   normativas:{t:'Reglamentos y documentos', principal:['nombre'], cols:[['nombre','Nombre',[]], ['url','Archivo',[]]]},
   recurrentes:{t:'Visitas recurrentes', principal:['nombre','depto'], excel:true, cols:[['nombre','Nombre',['nombre','visita']], ['ci','CI',['ci','carnet','documento']],
@@ -3925,6 +3925,20 @@ async function cargarAjustesEd(){
         <label class="chk"><input type="checkbox" data-mod="alertas_ronda" ${M.alertas_ronda !== false ? 'checked' : ''}> Correo si falta una ronda</label>
         <label class="chk"><input type="checkbox" data-mod="un_guardia" ${M.un_guardia === true ? 'checked' : ''}> Un solo guardia (sin relevo)</label>
         ${info('Al cambiar el relevo 1, el 2 se pone 12 h después. Los celulares con horario propio lo mantienen. La tolerancia es el margen que no cuenta; pasado el margen se cuentan todos los minutos. Los correos llegan 30 minutos después del relevo o de la ronda que faltó. "Un solo guardia": sus horas extras se cuentan contra su propio horario.')}`)}
+      ${acc('reloj', 'Control nocturno y recordatorios', `Presencia ${M.presencia_on === true ? 'activa ' + esc(M.presencia_desde || '00:00') + ' a ' + esc(M.presencia_hasta || '06:00') : 'apagada'} · recordatorio de ronda ${M.ronda_rec === false ? 'apagado' : 'activo'}`, `
+        <div class="h2" style="margin-top:0">Recordatorio de ronda en los celulares</div>
+        <label class="chk"><input type="checkbox" data-mod="ronda_rec" ${M.ronda_rec !== false ? 'checked' : ''}> Avisar al guardia cuando le toca la ronda</label>
+        <div class="dos"><label class="field"><span>Desde</span><input id="aRecD" type="time" value="${esc(M.ronda_rec_desde || '00:00')}"></label>
+          <label class="field"><span>Hasta</span><input id="aRecH" type="time" value="${esc(M.ronda_rec_hasta || '00:00')}"></label></div>
+        ${info('Suena en el celular cada "Rondas cada (h)" contado desde la última ronda del guardia (o desde su ingreso al turno), solo con turno abierto y dentro de este horario. Desde y hasta iguales = todo el día.')}
+        <div class="h2">Control de presencia nocturna</div>
+        <label class="chk"><input type="checkbox" data-mod="presencia_on" ${M.presencia_on === true ? 'checked' : ''}> Verificaciones al azar con firma y foto</label>
+        <div class="dos"><label class="field"><span>Desde</span><input id="aPD" type="time" value="${esc(M.presencia_desde || '00:00')}"></label>
+          <label class="field"><span>Hasta</span><input id="aPH" type="time" value="${esc(M.presencia_hasta || '06:00')}"></label></div>
+        <div class="dos"><label class="field"><span>Verificaciones por noche</span><input id="aPN" type="number" min="1" max="12" value="${+M.presencia_n || 3}" inputmode="numeric"></label>
+          <label class="field"><span>Separación mínima (min)</span><input id="aPS" type="number" min="5" max="240" step="5" value="${+M.presencia_sep || 40}" inputmode="numeric"></label></div>
+        <label class="field"><span>Tiempo máximo de respuesta (min)</span><input id="aPM" type="number" min="1" max="60" value="${+M.presencia_max || 8}" inputmode="numeric"></label>
+        ${info('Solo en la app Android, con turno abierto. Cada celular sortea los horarios antes de la noche; el guardia no los ve. La alarma suena fuerte hasta que firma y se toma una foto con la cámara frontal. Si no responde en el tiempo máximo te llega un correo (se revisa cada 5 minutos) y la alarma sigue sonando. Lo ves en Ajustes > Control nocturno.')}`)}
       ${acc('edificio', 'Bloques / torres', torres.length ? esc(torres.join(' · ')) : 'Sin bloques', `
         <div id="aTorres" style="display:flex;flex-wrap:wrap;gap:6px">${torres.map((t,i) => `<button class="tab on" data-torre="${i}">${esc(t)} ✕</button>`).join('') || '<span style="color:var(--mute);font-size:14px">Edificio sin bloques</span>'}</div>
         <div class="row"><input id="aTorreN" class="inp" style="flex:1" placeholder="Nuevo bloque"><button class="btn" id="aTorreAdd" style="height:46px">Agregar</button></div>`)}
@@ -3990,6 +4004,17 @@ $('#v-edi').addEventListener('click', async e => {
     if(!(cada >= 1 && cada <= 12)) return $('#aMsg').innerHTML = '<div class="msg bad">Las rondas van cada 1 a 12 horas.</div>';
     M.tarjeta_digitos = dig; M.tolerancia_min = tol; M.torres = [...ED.cfg.torres];
     M.relevos = [r1, r2].sort().join(','); M.ronda_cada = cada;
+    const hm = x => /^\d\d:\d\d$/.test(x), mins = x => +x.slice(0, 2) * 60 + +x.slice(3);
+    const recD = $('#aRecD').value, recH = $('#aRecH').value, pD = $('#aPD').value, pH = $('#aPH').value;
+    const pN = parseInt($('#aPN').value, 10), pS = parseInt($('#aPS').value, 10), pM = parseInt($('#aPM').value, 10);
+    if(!hm(recD) || !hm(recH)) return $('#aMsg').innerHTML = '<div class="msg bad">Revisa el horario del recordatorio de ronda.</div>';
+    if(!hm(pD) || !hm(pH) || pD === pH) return $('#aMsg').innerHTML = '<div class="msg bad">Revisa el horario del control nocturno.</div>';
+    if(!(pN >= 1 && pN <= 12)) return $('#aMsg').innerHTML = '<div class="msg bad">Las verificaciones por noche van de 1 a 12.</div>';
+    if(!(pS >= 5 && pS <= 240)) return $('#aMsg').innerHTML = '<div class="msg bad">La separación mínima va de 5 a 240 minutos.</div>';
+    if(!(pM >= 1 && pM <= 60)) return $('#aMsg').innerHTML = '<div class="msg bad">El tiempo máximo de respuesta va de 1 a 60 minutos.</div>';
+    const largo = (mins(pH) - mins(pD) + 1440) % 1440;
+    if((pN - 1) * pS > largo) return $('#aMsg').innerHTML = `<div class="msg bad">${pN} verificaciones separadas ${pS} min no caben entre ${pD} y ${pH}.</div>`;
+    Object.assign(M, {ronda_rec_desde: recD, ronda_rec_hasta: recH, presencia_desde: pD, presencia_hasta: pH, presencia_n: pN, presencia_sep: pS, presencia_max: pM});
     t.disabled = true;
     try{
       await apiEscribir('POST', 'eventos', nuevoEvento('Config', ED.cfg.ed, 'Supervisión', {modulos: JSON.stringify(M)}));
@@ -4118,6 +4143,10 @@ async function cargarLista(clase){
 }
 function textoFila(clase, f){
   const L = LISTAS[clase];
+  if(clase === 'propietarios') return ['Depto ' + (f.depto || '?') + (f.torre ? ' · ' + f.torre : '') + ' · ' + (f.copropietario || 'Sin propietario'),
+    [f.telefono, f.inquilino ? 'Inquilino: ' + f.inquilino : ''].filter(Boolean).join(' · ')];
+  if(clase === 'vehiculos') return [[f.nro_parqueo ? 'Parqueo ' + f.nro_parqueo : '', f.placa || ''].filter(Boolean).join(' · ') || '(sin placa)',
+    [f.depto ? 'Depto ' + f.depto : '', f.propietario, f.vehiculo || [f.marca, f.modelo].filter(Boolean).join(' '), f.color].filter(Boolean).join(' · ')];
   const t1 = L.principal.map(k => f[k]).filter(Boolean).join(' · ') || '(sin datos)';
   const resto = L.cols.filter(([k]) => !L.principal.includes(k) && k !== 'url' && k !== 'codigo' && f[k]).slice(0, 3).map(([k, t]) => f[k]).join(' · ');
   return [t1, resto];
@@ -4131,10 +4160,10 @@ function pintarListaEd(clase){
   c.innerHTML = `
     <div class="card" style="padding:10px 12px">
       <b>${esc(L.t)}</b> · ${D.filas.length} registro${D.filas.length === 1 ? '' : 's'}
-      <div style="font-size:12.5px;color:var(--mute);margin-top:2px">${D.existe ? 'Última versión en la nube: ' + esc(D.t.toLocaleString('es',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})) + (D.origen === 'web' ? ' (desde aquí)' : ' (desde un celular)')
-        : 'Todavía no hay datos en la nube: se suben solos cuando un celular con la app actualizada se conecta, o cárgalos aquí.'}</div>
+      <div style="font-size:12.5px;color:var(--mute);margin-top:2px">${D.existe ? 'Actualizado ' + esc(D.t.toLocaleString('es',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})) : 'Sin datos todavía'}</div>
       <div class="acts" style="margin-top:10px">
-        <button class="btn" id="lNuevo">＋ Agregar</button>
+        ${clase === 'propietarios' ? '<button class="btn" data-alta="propietario">＋ Propietario</button><button class="btn" data-alta="inquilino">＋ Inquilino</button><button class="btn" data-alta="residente">＋ Residente</button>'
+          : '<button class="btn" id="lNuevo">＋ Agregar</button>'}
         ${L.excel ? '<button class="btn" id="lImp">Importar Excel</button><button class="btn" id="lExp">Descargar Excel</button>' : ''}
       </div>
       ${L.excel ? '<input type="file" id="lArch" accept=".xlsx,.xls,.csv" hidden>' : ''}
@@ -4144,6 +4173,7 @@ function pintarListaEd(clase){
     <div id="lFilas">${idx.length ? idx.slice(0, 300).map(i => { const [a, b] = textoFila(clase, D.filas[i]);
       return `<div class="card gcard" data-fila="${i}" style="padding:10px 12px"><div style="font-weight:700">${esc(a)}</div>${b ? `<div class="gid">${esc(b)}</div>` : ''}</div>`; }).join('')
       : `<div class="empty">${q ? 'Sin resultados.' : 'Lista vacía.'}</div>`}${idx.length > 300 ? '<div class="empty">Usa el buscador para ver más.</div>' : ''}</div>`;
+  if(ED.abrirNuevo){ ED.abrirNuevo = false; formFila(clase, null); }
   const bus = $('#lBuscar');
   if(bus) bus.oninput = () => { ED.filtro = bus.value; const pos = bus.selectionStart; pintarListaEd(clase); const b2 = $('#lBuscar'); if(b2){ b2.focus(); b2.setSelectionRange(pos, pos); } };
 }
@@ -4152,6 +4182,12 @@ $('#v-edi').addEventListener('click', async e => {
   const clase = ED.sub; if(!LISTAS[clase]) return;
   const t = e.target, D = ED.datos[clase]; if(!D) return;
   if(t.id === 'lNuevo') return formFila(clase, null);
+  const alta = t.closest('[data-alta]');
+  if(alta){
+    /* residente: va a su propia lista (personas que viven en el depto) */
+    if(alta.dataset.alta === 'residente'){ ED.sub = 'residentes'; ED.filtro = ''; ED.abrirNuevo = true; return pintarEdificio(); }
+    return formPersona(alta.dataset.alta);
+  }
   if(t.id === 'lImp') return $('#lArch').click();
   if(t.id === 'lExp') return exportarExcel(clase);
   if(t.id === 'lDescartar'){ if(confirm('¿Descartar los cambios sin enviar?')){ delete ED.datos[clase]; delete ED.sucio[clase]; pintarEdificio(); } return; }
@@ -4168,6 +4204,7 @@ $('#v-edi').addEventListener('click', async e => {
 $('#v-edi').addEventListener('change', e => { if(e.target.id === 'lArch' && e.target.files[0]) importarExcel(ED.sub, e.target.files[0]); });
 
 function formFila(clase, i){
+  if(clase === 'vehiculos') return formVehiculo(i);
   const L = LISTAS[clase], D = ED.datos[clase], f = i === null ? {} : D.filas[i];
   const nuevo = i === null;
   let cuerpo;
@@ -4184,8 +4221,7 @@ function formFila(clase, i){
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
     <h2>${nuevo ? 'Agregar' : 'Editar'}</h2><div class="sub">${esc(L.t)} · ${esc(D.ed)}</div>${cuerpo}<div id="fMsg"></div>
     <button class="btn prim" id="fOk">${nuevo ? 'Agregar' : 'Guardar cambio'}</button>
-    ${nuevo ? '' : '<button class="btn danger" id="fDel" style="width:100%;margin-top:8px;padding:12px">Eliminar</button>'}
-    ${info('Los cambios se envían a los celulares cuando tocas <b>Guardar y enviar</b> en la lista.', 'Cuándo se aplica')}`;
+    ${nuevo ? '' : '<button class="btn danger" id="fDel" style="width:100%;margin-top:8px;padding:12px">Eliminar</button>'}`;
   $('#sheet').classList.add('on');
   $('#fOk').onclick = async () => {
     const nf = {...f};
@@ -4212,6 +4248,78 @@ function formFila(clase, i){
     marcarSucio(clase); $('#sheet').classList.remove('on'); pintarEdificio();
   };
   if($('#fDel')) $('#fDel').onclick = () => { if(!confirm('¿Eliminar este registro?')) return; D.filas.splice(i, 1); marcarSucio(clase); $('#sheet').classList.remove('on'); pintarEdificio(); };
+}
+
+/* Propietario o inquilino: un registro por departamento (si ya existe, se completa) */
+function formPersona(tipo){
+  const D = ED.datos.propietarios, prop = tipo === 'propietario';
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>${prop ? 'Propietario' : 'Inquilino'}</h2><div class="sub">${esc(D.ed)}</div>
+    <div class="dos"><label class="field"><span>Depto.</span><input id="p_depto" autocomplete="off"></label>
+      <label class="field"><span>Torre / bloque</span><input id="p_torre" autocomplete="off"></label></div>
+    <label class="field"><span>Nombre</span><input id="p_nombre" autocomplete="off" autocapitalize="words"></label>
+    <label class="field"><span>Teléfono</span><input id="p_tel" inputmode="tel" autocomplete="off"></label>
+    <div id="pPrev"></div><div id="fMsg"></div><button class="btn prim" id="fOk">Agregar</button>`;
+  $('#sheet').classList.add('on');
+  const buscar = () => { const d = $('#p_depto').value.trim().toLowerCase(), t = $('#p_torre').value.trim().toLowerCase();
+    return d ? D.filas.findIndex(f => String(f.depto || '').trim().toLowerCase() === d && (!t || String(f.torre || '').trim().toLowerCase() === t)) : -1; };
+  const previo = () => { const i = buscar(), f = i >= 0 ? D.filas[i] : null, ya = f && (prop ? f.copropietario : f.inquilino);
+    $('#pPrev').innerHTML = ya ? `<div class="msg">Este depto ya tiene ${prop ? 'propietario' : 'inquilino'}: <b>${esc(ya)}</b>. Se reemplaza.</div>` : ''; };
+  $('#p_depto').oninput = previo; $('#p_torre').oninput = previo;
+  $('#fOk').onclick = () => {
+    const depto = $('#p_depto').value.trim(), nombre = $('#p_nombre').value.trim();
+    if(!depto || !nombre) return $('#fMsg').innerHTML = '<div class="msg bad">Escribe el depto y el nombre.</div>';
+    const i = buscar(), f = i >= 0 ? {...D.filas[i]} : {id: edSeguro(D.ed) + '-' + depto + '-' + Date.now(), depto};
+    const torre = $('#p_torre').value.trim(); if(torre) f.torre = torre;
+    if(prop){ f.copropietario = nombre; f.telefono = $('#p_tel').value.trim(); }
+    else { f.inquilino = nombre; f.telefono_inq = $('#p_tel').value.trim(); }
+    if(i >= 0) D.filas[i] = f; else D.filas.push(f);
+    marcarSucio('propietarios'); $('#sheet').classList.remove('on'); pintarEdificio();
+  };
+}
+/* Vehículos: el nombre y teléfono salen del propietario o inquilino del depto */
+async function datosDepto(depto){
+  let P = ED.datos.propietarios;
+  if(!P || P.ed !== st.edif){
+    try{ const r = await api('eventos?select=detalle&tipo=eq.Datos&edificio=eq.' + enc(st.edif) + '&detalle->>clase=eq.propietarios&order=created_at.desc&limit=1');
+      P = {filas: r.length && Array.isArray(detalleDe(r[0]).filas) ? detalleDe(r[0]).filas : []}; }catch(_){ return null; }
+  }
+  const d = String(depto || '').trim().toLowerCase();
+  return d ? P.filas.find(f => String(f.depto || '').trim().toLowerCase() === d) || null : null;
+}
+function formVehiculo(i){
+  const D = ED.datos.vehiculos, f = i === null ? {} : D.filas[i], nuevo = i === null;
+  let nom = String(f.propietario || ''), de = 'propietario';
+  const m = / \((inquilino|otro)\)$/.exec(nom); if(m){ de = m[1]; nom = nom.slice(0, -m[0].length); }
+  const campo = (k, t, extra = '') => `<label class="field"><span>${t}</span><input id="v_${k}" value="${esc(f[k] || '')}" autocomplete="off" ${extra}></label>`;
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>${nuevo ? 'Vehículo' : 'Editar vehículo'}</h2><div class="sub">${esc(D.ed)}</div>
+    <div class="dos">${campo('nro_parqueo', 'N° parqueo')}${campo('depto', 'Depto.')}</div>
+    <div class="seg" id="vDe" style="display:flex;gap:6px;margin:4px 0 8px">${['propietario','inquilino','otro'].map(k => `<button class="btn ${de === k ? 'prim' : ''}" data-de="${k}" style="flex:1">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
+    <div class="dos"><label class="field"><span>Nombre</span><input id="v_nombre" value="${esc(nom)}" autocomplete="off"></label>${campo('telefono', 'Teléfono', 'inputmode="tel"')}</div>
+    ${campo('placa', 'Placa', 'style="text-transform:uppercase"')}
+    <div class="dos">${campo('marca', 'Marca')}${campo('modelo', 'Modelo')}</div>
+    <div class="dos">${campo('color', 'Color')}${campo('observaciones', 'Observaciones')}</div>
+    <div id="fMsg"></div><button class="btn prim" id="fOk">${nuevo ? 'Agregar' : 'Guardar cambio'}</button>
+    ${nuevo ? '' : '<button class="btn danger" id="fDel" style="width:100%;margin-top:8px;padding:12px">Eliminar</button>'}`;
+  $('#sheet').classList.add('on');
+  const llenar = async () => { if(de === 'otro') return; const p = await datosDepto($('#v_depto').value); if(!p) return;
+    const n = de === 'propietario' ? p.copropietario : p.inquilino, t = de === 'propietario' ? p.telefono : p.telefono_inq;
+    if(n) $('#v_nombre').value = n; if(t) $('#v_telefono').value = t; };
+  $('#vDe').onclick = e => { const b = e.target.closest('[data-de]'); if(!b) return; de = b.dataset.de;
+    $('#vDe').querySelectorAll('[data-de]').forEach(x => x.classList.toggle('prim', x === b)); llenar(); };
+  $('#v_depto').onchange = llenar;
+  $('#fOk').onclick = () => {
+    const nf = {...f};
+    for(const k of ['nro_parqueo','depto','telefono','marca','modelo','color','observaciones']){ const v = $('#v_' + k).value.trim(); if(v) nf[k] = v; else delete nf[k]; }
+    const placa = $('#v_placa').value.trim().toUpperCase(); if(placa) nf.placa = placa; else delete nf.placa;
+    const n = $('#v_nombre').value.trim(); if(n) nf.propietario = de === 'propietario' ? n : n + ' (' + de + ')'; else delete nf.propietario;
+    if(nf.marca || nf.modelo) nf.vehiculo = [nf.marca, nf.modelo].filter(Boolean).join(' ');
+    if(!nf.placa && !nf.depto) return $('#fMsg').innerHTML = '<div class="msg bad">Escribe la placa o el depto.</div>';
+    if(nuevo) D.filas.push(nf); else D.filas[i] = nf;
+    marcarSucio('vehiculos'); $('#sheet').classList.remove('on'); pintarEdificio();
+  };
+  if($('#fDel')) $('#fDel').onclick = () => { if(!confirm('¿Eliminar este vehículo?')) return; D.filas.splice(i, 1); marcarSucio('vehiculos'); $('#sheet').classList.remove('on'); pintarEdificio(); };
 }
 
 /* Sube un PDF o foto al almacenamiento de la nube (carpeta del edificio) */
@@ -4838,6 +4946,7 @@ async function pintarAjustes(){
   const usados = tok => { const m = devsDe.get(tok); return m ? [...m.values()].filter(d => d.estado === 'ok').length : 0; };
   box.innerHTML = `
     <div class="lista"><div class="it" id="cCel"><span class="sic">${icono('celular', 20)}</span><div class="t"><b>Celulares corporativos</b><small>Funciones, turnos y datos que reciben los celulares de cada edificio</small></div><span class="ichev0">${icono('atras', 16)}</span></div>
+      <div class="it" id="cNoc"><span class="sic">${icono('reloj', 20)}</span><div class="t"><b>Control nocturno</b><small>Verificaciones de presencia con firma y foto, por edificio y por guardia</small></div><span class="ichev0">${icono('atras', 16)}</span></div>
       <div class="it" id="cRsp"><span class="sic">${icono('archivo', 20)}</span><div class="t"><b>Respaldo y espacio</b><small>Fotos en la nube, respaldo de cada mes y abrir un respaldo</small></div><span class="ichev0">${icono('atras', 16)}</span></div></div>
     ${pendientes ? `<div class="h2" style="color:var(--warn)">Piden acceso (${pendientes})</div><div class="card">${solicitudes.map(x => `
       <div class="lnk" data-tok="${esc(x.tok)}" data-url="${esc(x.l.url)}" data-nom="${esc(x.l.nombre)}" data-ed="${esc(x.l.ed)}" data-clase="${x.l.clase}">
@@ -4907,6 +5016,7 @@ aplicarTema(temaActual());
 $('#v-cfg').addEventListener('click', async ev => {
   const t = ev.target;
   if(t.closest('#cCel')) return irA('edi');
+  if(t.closest('#cNoc')){ NOC.hist = null; NOC.noche = null; return irA('noc'); }
   if(t.closest('#cRsp')) return abrirRespaldo();
   const tb = t.closest('[data-tema]');
   if(tb){ guardar('tema', tb.dataset.tema); aplicarTema(tb.dataset.tema);
@@ -5108,9 +5218,9 @@ const claveVista = v => ['cob','cfg','sol'].includes(v) ? 'g' : st.edif + '|' + 
 function irA(v, desdeAtras){
   if(!desdeAtras && v !== vistaActual) navPush({vista: vistaActual});
   vistaActual = v;
-  for(const x of ['mov','gua','sol','bus','inf','edi','cfg','cob']) $('#v-' + x).hidden = x !== v;
+  for(const x of ['mov','gua','sol','bus','inf','edi','cfg','cob','noc']) $('#v-' + x).hidden = x !== v;
   [...$('#bnav').children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  $('#cfgBtn').classList.toggle('on', v === 'cfg' || v === 'edi');
+  $('#cfgBtn').classList.toggle('on', v === 'cfg' || v === 'edi' || v === 'noc');
   $('#hTit').textContent = TITULOS[v] || ''; subtituloVista();
   /* Cobros, Peticiones y Ajustes son de todos los edificios: sin selector arriba */
   $('header .row').hidden = v === 'cob' || v === 'cfg' || v === 'sol';
@@ -5125,6 +5235,7 @@ function irA(v, desdeAtras){
   scrollTo({top:0});
   if(v === 'mov'){ if(st.token !== NUBE.id || Date.now() - (st.actualizado || 0) > 120000) refrescar(); return; }
   if(v === 'sol'){ pintarSolicitudes(); return; }
+  if(v === 'noc'){ pintarNocturno(); return; }
   if(v === 'cob' && (COB_SUCIO || !Cobros.vigente())){ COB_SUCIO = false; VIS.cob = 'g'; Cobros.pintar($('#v-cob'), true); return; }
   if(v === 'gua' && GU.token !== NUBE.id){ VIS.gua = claveVista('gua'); if(GU.datos && $('#v-gua').innerHTML.trim()) pintarGuardias(); cargarGuardias(); return; }
   const k = claveVista(v);
@@ -5137,14 +5248,14 @@ function irA(v, desdeAtras){
   if(v === 'cfg') pintarAjustes();
   if(v === 'cob') Cobros.pintar($('#v-cob'));
 }
-const TITULOS = {mov:'En vivo', gua:'Guardias', sol:'Peticiones', cob:'Cobros', inf:'Informe', bus:'Buscar', cfg:'Ajustes', edi:'Celulares corporativos'};
+const TITULOS = {noc:'Control nocturno', mov:'En vivo', gua:'Guardias', sol:'Peticiones', cob:'Cobros', inf:'Informe', bus:'Buscar', cfg:'Ajustes', edi:'Celulares corporativos'};
 /* título de la sección y, debajo, de qué se trata (edificio, mes o todos) */
 function subtituloVista(){
   const v = vistaActual, m = mesActual(), mes = mesTxt(m);
   const hora = st.actualizado ? st.actualizado.toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}) : '';
   $('#upd').textContent = v === 'mov' ? (st.edif || '') + (hora ? ' · ' + hora : '')
     : ['sol','cob','cfg'].includes(v) ? 'Todos los edificios'
-    : v === 'edi' ? (st.edif || '') : (st.edif || '') + ' · ' + mes;
+    : v === 'edi' || v === 'noc' ? (st.edif || '') : (st.edif || '') + ' · ' + mes;
 }
 $('#cfgBtn').innerHTML = icono('engranaje', 20);
 $('#cfgBtn').addEventListener('click', () => irA('cfg'));
@@ -5179,6 +5290,7 @@ function refrescarVista(){
   VIS.gua = claveVista('gua');
   if(v === 'cob'){ VIS.cob = 'g'; t.push(Cobros.pintar($('#v-cob'), true)); } else COB_SUCIO = true;
   if(v === 'cfg'){ VIS.cfg = 'g'; t.push(pintarAjustes()); }
+  if(v === 'noc') t.push(pintarNocturno());
   if(v === 'bus'){ VIS.bus = claveVista('bus'); if(BUS.res.length) t.push(buscar()); }
   if(v === 'inf'){ VIS.inf = claveVista('inf'); }
   if(v === 'edi'){
@@ -5197,6 +5309,7 @@ function alCambiarEdificio(){
   VIS.gua = claveVista('gua'); cargarGuardias();
   const v = vistaActual;
   if(['bus','edi','inf'].includes(v)){ VIS[v] = claveVista(v); ({bus:pintarBuscar, edi:pintarEdificio, inf:pintarInforme})[v](); }
+  if(v === 'noc'){ NOC.hist = null; NOC.noche = null; pintarNocturno(); }
 }
 $('#bnav').addEventListener('click', e => { const b = e.target.closest('button'); if(b) irA(b.dataset.v); });
 $('#mesSel').addEventListener('change', () => {
@@ -5205,6 +5318,172 @@ $('#mesSel').addEventListener('change', () => {
   if(v === 'gua' || v === 'bus' || v === 'inf'){ VIS.gua = claveVista('gua'); cargarGuardias(); }
   if(v === 'inf'){ VIS.inf = claveVista('inf'); pintarInforme(); }
 });
+
+/* ---------------- Control de presencia nocturna ----------------
+   Los celulares Android con turno abierto sortean los horarios de la noche
+   ('PresenciaPlan'), suenan con alarma y el guardia responde con firma y foto
+   ('Presencia'). Aquí supervisión ve cada verificación con su estado. */
+const NOC = {noche: null, gen: 0, hist: null};
+const NOC_EST = {
+  programada: ['PROGRAMADA', ''], activa: ['ALARMA ACTIVA', 'warn'], respondida: ['RESPONDIDA', 'ok'],
+  tardia: ['RESPUESTA TARDÍA', 'warn'], sin: ['SIN RESPUESTA', 'bad'], conexion: ['SIN CONEXIÓN', 'bad'],
+};
+const ymdNoc = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const minsNoc = x => +String(x).slice(0, 2) * 60 + +String(x).slice(3, 5);
+/* la noche que todavía no terminó (igual que el celular) */
+function nocheActual(M){
+  const d = minsNoc(M.presencia_desde || '00:00'), h = minsNoc(M.presencia_hasta || '06:00'), ahora = new Date();
+  for(let dia = -1; dia <= 1; dia++){
+    const ini = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + dia, 0, d);
+    let fin = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + dia, 0, h);
+    if(fin <= ini) fin = new Date(+fin + 864e5);
+    if(fin > ahora) return ymdNoc(ini);
+  }
+  return ymdNoc(ahora);
+}
+const durTxt = s => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60), r = s % 60; return m ? m + ' min ' + (r ? r + ' s' : '') : r + ' s'; };
+const horaNoc = t => t.toLocaleTimeString('es', {hour: '2-digit', minute: '2-digit', hour12: false});
+
+/* Une planes y respuestas: una fila por verificación con su estado */
+function armarVerificaciones(planes, resp, pres, maxDef){
+  const porDev = new Map();
+  for(const e of planes){ const k = e.device_id || ''; if(!porDev.has(k)) porDev.set(k, []); porDev.get(k).push(e); }
+  const rPorPid = new Map(resp.map(e => [String(detalleDe(e).pid || ''), e]));
+  const vistos = new Map((pres || []).map(x => [x.device_id, fecha(x.last_seen)]));
+  const ahora = Date.now(), out = [];
+  for(const [dev, lista] of porDev){
+    lista.sort((a, b) => horaReal(a) - horaReal(b));
+    lista.forEach((e, i) => {
+      const d = detalleDe(e), sig = lista[i + 1] ? horaReal(lista[i + 1]) : null;
+      const max = +d.max_min || maxDef;
+      for(const it of (Array.isArray(d.items) ? d.items : [])){
+        const t = fecha(it.t), r = rPorPid.get(String(it.pid));
+        /* reprogramada después (otro turno o cambio de ajustes): la que no sonó se descarta */
+        if(!r && sig && t > sig) continue;
+        const x = {pid: it.pid, t, guardia: e.guardia || '', ci: d.guard_ci || '', puesto: d.puesto || d.bloque || '', dev, max, r: null, est: 'programada'};
+        if(r){
+          const rd = detalleDe(r);
+          x.r = {e: r, d: rd, demora: +rd.demora_s || (fecha(rd.respondida) - t) / 1000, cuando: fecha(rd.respondida || rd.ts)};
+          x.est = rd.estado === 'tardia' ? 'tardia' : 'respondida';
+        } else if(+t > ahora) x.est = 'programada';
+        else if(ahora < +t + max * 60e3) x.est = 'activa';
+        else { const vs = vistos.get(dev); x.est = !vs || vs < +t - 5 * 60e3 ? 'conexion' : 'sin'; x.ultimo = vs || null; }
+        out.push(x);
+      }
+    });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+function filaNoc(x, conGuardia){
+  const [txt, cls] = NOC_EST[x.est];
+  const r = x.r, fotos = r ? fotosDe(r.d) : [];
+  const transc = !r && x.est !== 'programada' ? durTxt((Date.now() - x.t) / 1000) : '';
+  return `<div class="card" style="margin:8px 0;padding:12px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:16px">${esc(horaNoc(x.t))}</b><span class="pill ${cls}">${txt}</span>
+      ${conGuardia ? `<span style="color:var(--mute);font-size:13px">${esc(x.guardia)}${x.puesto ? ' · ' + esc(x.puesto) : ''}</span>` : ''}</div>
+    <div style="font-size:13px;color:var(--mute);margin-top:4px">${r
+      ? `Respondió a las ${esc(horaNoc(r.cuando))} · tiempo de reacción ${esc(durTxt(r.demora))}${r.d.ubicacion ? ` · <a href="https://maps.google.com/?q=${esc(r.d.ubicacion)}" target="_blank" rel="noopener">ubicación</a>` : ''}`
+      : x.est === 'programada' ? 'Todavía no sonó.'
+      : `Sonó a las ${esc(horaNoc(x.t))} · ${esc(transc)} sin respuesta${x.est === 'conexion' ? (x.ultimo ? ` · el celular no se conecta desde las ${esc(horaNoc(x.ultimo))}` : ' · el celular no se conectó') : ''}`}</div>
+    ${r ? `<div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+      ${fotos.map(u => `<img src="${esc(u)}" data-src="${esc(u)}" alt="Foto de verificación" style="width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in" loading="lazy">`).join('')}
+      ${r.d.firma ? `<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px">${firmaSvg(r.d.firma, 70)}</div>` : ''}</div>` : ''}
+  </div>`;
+}
+async function pintarNocturno(){
+  const box = $('#v-noc'), mio = ++NOC.gen, ed = st.edif;
+  if(NOC.hist) return pintarHistNoc();
+  box.innerHTML = `<div class="volver"><button class="lnkbtn" id="nocVolver">${icono('atras', 16)} Ajustes</button></div><div class="carga" role="status" aria-label="Cargando"></div>`;
+  let M = {};
+  try{ M = (await leerModulos(ed)).mod; }catch(_){}
+  if(mio !== NOC.gen) return;
+  if(!NOC.noche) NOC.noche = nocheActual(M);
+  const n = NOC.noche, [y, m, d] = n.split('-').map(Number);
+  const desde = new Date(y, m - 1, d - 1).toISOString(), hasta = new Date(y, m - 1, d + 2).toISOString();
+  let planes = [], resp = [], inc = [], pres = [];
+  try{
+    [planes, resp, inc, pres] = await Promise.all([
+      api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.PresenciaPlan&edificio=eq.' + enc(ed) + '&detalle->>noche=eq.' + n + '&order=created_at.asc&limit=500'),
+      api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.Presencia&edificio=eq.' + enc(ed) + '&detalle->>noche=eq.' + n + '&limit=500'),
+      api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.PresenciaIncidencia&edificio=eq.' + enc(ed) + '&created_at=gte.' + enc(desde) + '&created_at=lt.' + enc(hasta) + '&order=created_at.desc&limit=100'),
+      api('presencia?select=device_id,guardia,last_seen,en_turno&edificio=eq.' + enc(ed) + '&order=last_seen.desc&limit=100'),
+    ]);
+  }catch(e){ if(mio === NOC.gen) box.innerHTML = `<div class="volver"><button class="lnkbtn" id="nocVolver">${icono('atras', 16)} Ajustes</button></div><div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
+  if(mio !== NOC.gen) return;
+  const lista = armarVerificaciones(planes, resp, pres, +M.presencia_max || 8);
+  const cuenta = k => lista.filter(x => x.est === k).length;
+  const grupos = new Map();
+  for(const x of lista){ const k = x.ci || x.guardia; if(!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(x); }
+  const fechaTxt = new Date(y, m - 1, d).toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'});
+  const devs = pres.filter(x => !String(x.device_id).startsWith('webg_'));
+  box.innerHTML = `<div class="volver"><button class="lnkbtn" id="nocVolver">${icono('atras', 16)} Ajustes</button></div>
+    ${M.presencia_on === true ? `<div class="msg">Activo de ${esc(M.presencia_desde || '00:00')} a ${esc(M.presencia_hasta || '06:00')} · ${+M.presencia_n || 3} verificaciones por noche · respuesta máxima ${+M.presencia_max || 8} min</div>`
+      : `<div class="msg bad">El control nocturno está apagado en ${esc(ed)}. Actívalo en Celulares corporativos > Ajustes > Control nocturno y recordatorios.</div>`}
+    <div class="row" style="gap:8px;align-items:center;margin:10px 0"><button class="btn" id="nocAnt" aria-label="Noche anterior">‹</button>
+      <input id="nocDia" class="inp" type="date" value="${esc(n)}" style="flex:1"><button class="btn" id="nocSig" aria-label="Noche siguiente">›</button></div>
+    <div style="font-size:13px;color:var(--mute);margin-bottom:8px">Noche del ${esc(fechaTxt)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${Object.keys(NOC_EST).map(k => `<span class="pill ${NOC_EST[k][1]}">${NOC_EST[k][0]}: ${cuenta(k)}</span>`).join('')}</div>
+    ${inc.length ? `<div class="h2" style="color:var(--bad)">Incidencias técnicas</div><div class="card">${inc.map(e => `<div style="padding:8px 0;border-top:1px solid var(--line)"><b>${esc(e.guardia || 'Celular')}</b> · ${esc(horaNoc(horaReal(e)))}<div style="font-size:13px;color:var(--mute)">${esc(detalleDe(e).motivo || '')}</div></div>`).join('')}</div>` : ''}
+    <div class="h2">Verificaciones</div>
+    ${grupos.size ? [...grupos.values()].map(g => `<div class="card" style="padding:12px">
+        <div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>${esc(g[0].guardia || 'Guardia')}</b><div style="font-size:13px;color:var(--mute)">${esc(g[0].puesto || 'Puesto principal')} · ${g.length} verificación(es)</div></div>
+          <button class="btn" data-histnoc="${esc(g[0].ci || '')}" data-nom="${esc(g[0].guardia || '')}">Historial</button></div>
+        ${g.map(x => filaNoc(x, false)).join('')}</div>`).join('')
+      : `<div class="empty">No hay verificaciones para esta noche. Se programan cuando un celular Android del edificio tiene el turno abierto y el control está activo.</div>`}
+    <div class="h2">Celulares del edificio</div>
+    <div class="card">${devs.length ? devs.map(x => { const t = fecha(x.last_seen), on = Date.now() - t < 3 * 60e3;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)"><span style="width:9px;height:9px;border-radius:50%;background:${on ? 'var(--ok)' : 'var(--bad)'};flex:0 0 9px"></span>
+        <div style="flex:1"><b>${esc(x.guardia || 'Sin turno')}</b><div style="font-size:13px;color:var(--mute)">${on ? 'Conectado' : 'Sin conexión, último contacto ' + esc(hace(t))}${x.en_turno ? ' · de turno' : ''}</div></div></div>`; }).join('')
+      : '<div class="empty">Sin celulares registrados.</div>'}</div>
+    ${info('Si el celular está apagado, sin batería o sin internet, la alarma igual suena si el celular está encendido (está programada en el propio celular), pero la respuesta llega cuando vuelve la conexión. Si está apagado, no puede sonar: queda SIN CONEXIÓN y te llega el correo.', 'Límites')}`;
+}
+async function pintarHistNoc(){
+  const box = $('#v-noc'), mio = ++NOC.gen, ed = st.edif, {ci, nom} = NOC.hist;
+  box.innerHTML = `<div class="volver"><button class="lnkbtn" id="nocVolverH">${icono('atras', 16)} Control nocturno</button></div><div class="carga" role="status" aria-label="Cargando"></div>`;
+  const desde = new Date(Date.now() - 31 * 864e5).toISOString();
+  const quien = ci ? '&detalle->>guard_ci=eq.' + enc(ci) : '&guardia=eq.' + enc(nom);
+  let planes = [], resp = [], pres = [], M = {};
+  try{
+    [planes, resp, pres, M] = await Promise.all([
+      api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.PresenciaPlan&edificio=eq.' + enc(ed) + quien + '&created_at=gte.' + enc(desde) + '&order=created_at.asc&limit=1000'),
+      api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.Presencia&edificio=eq.' + enc(ed) + quien + '&created_at=gte.' + enc(desde) + '&limit=1000'),
+      api('presencia?select=device_id,last_seen&edificio=eq.' + enc(ed) + '&limit=100'),
+      leerModulos(ed).then(r => r.mod).catch(() => ({})),
+    ]);
+  }catch(e){ if(mio === NOC.gen) box.innerHTML += `<div class="err">No se pudo leer la nube (${esc(e.message)}).</div>`; return; }
+  if(mio !== NOC.gen) return;
+  /* los planes de distintas noches no se reemplazan entre sí */
+  const porNoche = new Map();
+  for(const e of planes){ const k = detalleDe(e).noche || ''; if(!porNoche.has(k)) porNoche.set(k, []); porNoche.get(k).push(e); }
+  const filas = [];
+  for(const [k, ps] of porNoche) filas.push(...armarVerificaciones(ps, resp, pres, +M.presencia_max || 8).map(x => ({...x, noche: k})));
+  filas.sort((a, b) => b.t - a.t);
+  const res = k => filas.filter(x => x.est === k).length;
+  const tiempos = filas.filter(x => x.r).map(x => x.r.demora);
+  const prom = tiempos.length ? tiempos.reduce((a, b) => a + b, 0) / tiempos.length : 0;
+  let html = `<div class="volver"><button class="lnkbtn" id="nocVolverH">${icono('atras', 16)} Control nocturno</button></div>
+    <h2 style="margin:6px 0 2px">${esc(nom || 'Guardia')}</h2><div style="font-size:13px;color:var(--mute)">Últimos 30 días · ${esc(ed)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0"><span class="pill ok">Respondidas: ${res('respondida')}</span><span class="pill warn">Tardías: ${res('tardia')}</span>
+      <span class="pill bad">Sin respuesta: ${res('sin') + res('conexion')}</span><span class="pill">Reacción promedio: ${esc(durTxt(prom))}</span></div>`;
+  let ult = '';
+  for(const x of filas){
+    if(x.noche !== ult){ ult = x.noche; const [a, b, c] = x.noche.split('-').map(Number); html += `<div class="h2">${esc(new Date(a, b - 1, c).toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'}))}</div>`; }
+    html += filaNoc(x, false);
+  }
+  if(!filas.length) html += '<div class="empty">Sin verificaciones en los últimos 30 días.</div>';
+  box.innerHTML = html;
+}
+$('#v-noc').addEventListener('click', e => {
+  if(e.target.closest('#nocVolver')){ if(NAV.pila.length && NAV.pila[NAV.pila.length - 1].vista === 'cfg') history.back(); else irA('cfg'); return; }
+  if(e.target.closest('#nocVolverH')){ NOC.hist = null; pintarNocturno(); return; }
+  if(e.target.dataset.src){ verFoto(e.target.dataset.src); return; }
+  const h = e.target.closest('[data-histnoc]');
+  if(h){ NOC.hist = {ci: h.dataset.histnoc, nom: h.dataset.nom}; pintarHistNoc(); scrollTo({top: 0}); return; }
+  const mover = dias => { const [y, m, d] = NOC.noche.split('-').map(Number); NOC.noche = ymdNoc(new Date(y, m - 1, d + dias)); pintarNocturno(); };
+  if(e.target.closest('#nocAnt')) return mover(-1);
+  if(e.target.closest('#nocSig')) return mover(1);
+});
+$('#v-noc').addEventListener('change', e => { if(e.target.id === 'nocDia' && e.target.value){ NOC.noche = e.target.value; pintarNocturno(); } });
 
 /* ---------- Arranque ---------- */
 (async function(){
