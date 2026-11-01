@@ -3471,7 +3471,8 @@ async function generarInforme(){
     if(P.secc.turnos){
       datos.turnos = de('Ingreso de turno','Salida de turno','Doblar turno').filter(delMes).map(x => ({...base(x),
         mov: x.e.tipo === 'Doblar turno' ? 'Dobla turno' : x.e.tipo.replace(' de turno', ''), guardia: x.g, ci: x.d.guard_ci,
-        bloque: x.d.bloque, turno: x.d.nivel ? x.d.nivel + ' h' : '', obs: x.d.observaciones}));
+        bloque: x.d.bloque, turno: x.d.nivel ? x.d.nivel + ' h' : '',
+        obs: String(x.d.observaciones || '').trim() || (x.e.tipo === 'Salida de turno' ? 'Sin novedad' : '')}));
     }
     /* cada jornada: empieza con su ingreso y termina con la salida firmada (nombre, hora y firma) */
     if(P.secc.jornadas){
