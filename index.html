@@ -3941,20 +3941,22 @@ async function cargarAjustesEd(){
         <label class="chk"><input type="checkbox" data-mod="alertas_ronda" ${M.alertas_ronda !== false ? 'checked' : ''}> Correo si falta una ronda</label>
         <label class="chk"><input type="checkbox" data-mod="un_guardia" ${M.un_guardia === true ? 'checked' : ''}> Un solo guardia (sin relevo)</label>
         ${info('Al cambiar el relevo 1, el 2 se pone 12 h después. Los celulares con horario propio lo mantienen. La tolerancia es el margen que no cuenta; pasado el margen se cuentan todos los minutos. Los correos llegan 30 minutos después del relevo o de la ronda que faltó. "Un solo guardia": sus horas extras se cuentan contra su propio horario.')}`)}
-      ${acc('reloj', 'Control nocturno y recordatorios', `Presencia ${M.presencia_on === true ? 'activa ' + esc(M.presencia_desde || '00:00') + ' a ' + esc(M.presencia_hasta || '06:00') : 'apagada'} · recordatorio de ronda ${M.ronda_rec === false ? 'apagado' : 'activo'}`, `
+      ${acc('reloj', 'Control nocturno y recordatorios', `Presencia ${M.presencia_on === true ? 'activa ' + (M.presencia_desde && M.presencia_desde === M.presencia_hasta ? 'todo el día' : esc(M.presencia_desde || '00:00') + ' a ' + esc(M.presencia_hasta || '06:00')) : 'apagada'} · recordatorio de ronda ${M.ronda_rec === false ? 'apagado' : 'activo'}`, `
         <div class="h2" style="margin-top:0">Recordatorio de ronda en los celulares</div>
         <label class="chk"><input type="checkbox" data-mod="ronda_rec" ${M.ronda_rec !== false ? 'checked' : ''}> Avisar al guardia cuando le toca la ronda</label>
         <div class="dos"><label class="field"><span>Desde</span><input id="aRecD" type="time" value="${esc(M.ronda_rec_desde || '00:00')}"></label>
           <label class="field"><span>Hasta</span><input id="aRecH" type="time" value="${esc(M.ronda_rec_hasta || '00:00')}"></label></div>
         ${info('Suena en el celular cada "Rondas cada (h)" contado desde la última ronda del guardia (o desde su ingreso al turno), solo con turno abierto y dentro de este horario. Desde y hasta iguales = todo el día.')}
-        <div class="h2">Control de presencia nocturna</div>
-        <label class="chk"><input type="checkbox" data-mod="presencia_on" ${M.presencia_on === true ? 'checked' : ''}> Verificaciones al azar con firma y foto</label>
-        <div class="dos"><label class="field"><span>Desde</span><input id="aPD" type="time" value="${esc(M.presencia_desde || '00:00')}"></label>
-          <label class="field"><span>Hasta</span><input id="aPH" type="time" value="${esc(M.presencia_hasta || '06:00')}"></label></div>
-        <div class="dos"><label class="field"><span>Verificaciones por noche</span><input id="aPN" type="number" min="1" max="12" value="${+M.presencia_n || 3}" inputmode="numeric"></label>
-          <label class="field"><span>Separación mínima (min)</span><input id="aPS" type="number" min="5" max="240" step="5" value="${+M.presencia_sep || 40}" inputmode="numeric"></label></div>
+        <div class="h2">Control de presencia</div>
+        <label class="chk"><input type="checkbox" data-mod="presencia_on" ${M.presencia_on === true ? 'checked' : ''}> Verificaciones al azar con selfie</label>
+        <label class="chk"><input type="checkbox" id="aP24" ${M.presencia_desde && M.presencia_desde === M.presencia_hasta ? 'checked' : ''}> Todo el día (turno diurno y nocturno)</label>
+        <div class="dos"><label class="field"><span id="aPDl">${M.presencia_desde && M.presencia_desde === M.presencia_hasta ? 'Empieza a contar' : 'Desde'}</span><input id="aPD" type="time" value="${esc(M.presencia_desde || '00:00')}"></label>
+          <label class="field" id="aPHf" ${M.presencia_desde && M.presencia_desde === M.presencia_hasta ? 'hidden' : ''}><span>Hasta</span><input id="aPH" type="time" value="${esc(M.presencia_hasta || '06:00')}"></label></div>
+        <label class="field"><span>Frecuencia</span><select id="aPB">${[[1,'Una al azar cada 1 hora'],[2,'Una al azar cada 2 horas'],[3,'Una al azar cada 3 horas'],[4,'Una al azar cada 4 horas'],[0,'Cantidad fija en todo el horario']].map(([v,t]) => `<option value="${v}" ${(M.presencia_bloque_h ?? 2) == v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <div class="dos"><label class="field" id="aPNf" ${(M.presencia_bloque_h ?? 2) == 0 ? '' : 'hidden'}><span>Cantidad</span><input id="aPN" type="number" min="1" max="12" value="${+M.presencia_n || 3}" inputmode="numeric"></label>
+          <label class="field"><span>Separación mínima (min)</span><input id="aPS" type="number" min="5" max="240" step="5" value="${+M.presencia_sep || 30}" inputmode="numeric"></label></div>
         <label class="field"><span>Tiempo máximo de respuesta (min)</span><input id="aPM" type="number" min="1" max="60" value="${+M.presencia_max || 8}" inputmode="numeric"></label>
-        ${info('Solo en la app Android, con turno abierto. Cada celular sortea los horarios antes de la noche; el guardia no los ve. La alarma suena fuerte hasta que firma y se toma una foto con la cámara frontal. Si no responde en el tiempo máximo te llega un correo (se revisa cada 5 minutos) y la alarma sigue sonando. Lo ves en Ajustes > Control nocturno.')}`)}
+        ${info('Solo en la app Android 12.20 o más nueva, con turno abierto. El horario se parte en bloques (por ejemplo de 2 horas) y en cada bloque suena una vez a una hora al azar; el guardia no la ve. La alarma suena fuerte hasta que se toma una selfie con la cámara frontal. Si no responde en el tiempo máximo te llega un correo (se revisa cada 5 minutos) y la alarma sigue sonando. Lo ves en Ajustes > Control nocturno.')}`)}
       ${acc('edificio', 'Bloques / torres', torres.length ? esc(torres.join(' · ')) : 'Sin bloques', `
         <div id="aTorres" style="display:flex;flex-wrap:wrap;gap:6px">${torres.map((t,i) => `<button class="tab on" data-torre="${i}">${esc(t)} ✕</button>`).join('') || '<span style="color:var(--mute);font-size:14px">Edificio sin bloques</span>'}</div>
         <div class="row"><input id="aTorreN" class="inp" style="flex:1" placeholder="Nuevo bloque"><button class="btn" id="aTorreAdd" style="height:46px">Agregar</button></div>`)}
@@ -3967,6 +3969,8 @@ async function cargarAjustesEd(){
 $('#v-edi').addEventListener('click', e => { if(e.target.id === 'aNuevoEd') formNuevoEdificio(); });
 /* relevo 2 = relevo 1 + 12 h (se puede corregir a mano) */
 $('#v-edi').addEventListener('change', e => {
+  if(e.target.id === 'aP24'){ const on = e.target.checked; $('#aPHf').hidden = on; $('#aPDl').textContent = on ? 'Empieza a contar' : 'Desde'; return; }
+  if(e.target.id === 'aPB'){ $('#aPNf').hidden = e.target.value !== '0'; return; }
   if(e.target.id !== 'aR1' || !/^\d\d:\d\d$/.test(e.target.value)) return;
   const [h, m] = e.target.value.split(':').map(Number);
   $('#aR2').value = String((h + 12) % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
@@ -4024,13 +4028,15 @@ $('#v-edi').addEventListener('click', async e => {
     const recD = $('#aRecD').value, recH = $('#aRecH').value, pD = $('#aPD').value, pH = $('#aPH').value;
     const pN = parseInt($('#aPN').value, 10), pS = parseInt($('#aPS').value, 10), pM = parseInt($('#aPM').value, 10);
     if(!hm(recD) || !hm(recH)) return $('#aMsg').innerHTML = '<div class="msg bad">Revisa el horario del recordatorio de ronda.</div>';
-    if(!hm(pD) || !hm(pH) || pD === pH) return $('#aMsg').innerHTML = '<div class="msg bad">Revisa el horario del control nocturno.</div>';
+    const p24 = $('#aP24').checked, pB = parseInt($('#aPB').value, 10) || 0, pHf = p24 ? pD : pH;
+    if(!hm(pD) || !hm(pHf) || (!p24 && pD === pH)) return $('#aMsg').innerHTML = '<div class="msg bad">Revisa el horario del control de presencia.</div>';
     if(!(pN >= 1 && pN <= 12)) return $('#aMsg').innerHTML = '<div class="msg bad">Las verificaciones por noche van de 1 a 12.</div>';
     if(!(pS >= 5 && pS <= 240)) return $('#aMsg').innerHTML = '<div class="msg bad">La separación mínima va de 5 a 240 minutos.</div>';
     if(!(pM >= 1 && pM <= 60)) return $('#aMsg').innerHTML = '<div class="msg bad">El tiempo máximo de respuesta va de 1 a 60 minutos.</div>';
-    const largo = (mins(pH) - mins(pD) + 1440) % 1440;
-    if((pN - 1) * pS > largo) return $('#aMsg').innerHTML = `<div class="msg bad">${pN} verificaciones separadas ${pS} min no caben entre ${pD} y ${pH}.</div>`;
-    Object.assign(M, {ronda_rec_desde: recD, ronda_rec_hasta: recH, presencia_desde: pD, presencia_hasta: pH, presencia_n: pN, presencia_sep: pS, presencia_max: pM});
+    const largo = p24 ? 1440 : (mins(pH) - mins(pD) + 1440) % 1440;
+    if(pB > 0 && pB * 60 > largo) return $('#aMsg').innerHTML = `<div class="msg bad">El horario (${Math.round(largo / 6) / 10} h) es más corto que un bloque de ${pB} h.</div>`;
+    if(!pB && (pN - 1) * pS > largo) return $('#aMsg').innerHTML = `<div class="msg bad">${pN} verificaciones separadas ${pS} min no caben entre ${pD} y ${pH}.</div>`;
+    Object.assign(M, {ronda_rec_desde: recD, ronda_rec_hasta: recH, presencia_desde: pD, presencia_hasta: pHf, presencia_bloque_h: pB, presencia_n: pN, presencia_sep: pS, presencia_max: pM});
     t.disabled = true;
     try{
       await apiEscribir('POST', 'eventos', nuevoEvento('Config', ED.cfg.ed, 'Supervisión', {modulos: JSON.stringify(M)}));
@@ -4970,7 +4976,7 @@ async function pintarAjustes(){
   const usados = tok => { const m = devsDe.get(tok); return m ? [...m.values()].filter(d => d.estado === 'ok').length : 0; };
   box.innerHTML = `
     <div class="lista"><div class="it" id="cCel"><span class="sic">${icono('celular', 20)}</span><div class="t"><b>Celulares corporativos</b><small>Funciones, turnos y datos que reciben los celulares de cada edificio</small></div><span class="ichev0">${icono('atras', 16)}</span></div>
-      <div class="it" id="cNoc"><span class="sic">${icono('reloj', 20)}</span><div class="t"><b>Control nocturno</b><small>Verificaciones de presencia con firma y foto, por edificio y por guardia</small></div><span class="ichev0">${icono('atras', 16)}</span></div>
+      <div class="it" id="cNoc"><span class="sic">${icono('reloj', 20)}</span><div class="t"><b>Control nocturno</b><small>Verificaciones de presencia con selfie, por edificio y por guardia</small></div><span class="ichev0">${icono('atras', 16)}</span></div>
       <div class="it" id="cRsp"><span class="sic">${icono('archivo', 20)}</span><div class="t"><b>Respaldo y espacio</b><small>Fotos en la nube, respaldo de cada mes y abrir un respaldo</small></div><span class="ichev0">${icono('atras', 16)}</span></div></div>
     ${pendientes ? `<div class="h2" style="color:var(--warn)">Piden acceso (${pendientes})</div><div class="card">${solicitudes.map(x => `
       <div class="lnk" data-tok="${esc(x.tok)}" data-url="${esc(x.l.url)}" data-nom="${esc(x.l.nombre)}" data-ed="${esc(x.l.ed)}" data-clase="${x.l.clase}">
@@ -5441,7 +5447,7 @@ async function pintarNocturno(){
   const fechaTxt = new Date(y, m - 1, d).toLocaleDateString('es', {weekday: 'long', day: 'numeric', month: 'long'});
   const devs = pres.filter(x => !String(x.device_id).startsWith('webg_'));
   box.innerHTML = `<div class="volver"><button class="lnkbtn" id="nocVolver">${icono('atras', 16)} Ajustes</button></div>
-    ${M.presencia_on === true ? `<div class="msg">Activo de ${esc(M.presencia_desde || '00:00')} a ${esc(M.presencia_hasta || '06:00')} · ${+M.presencia_n || 3} verificaciones por noche · respuesta máxima ${+M.presencia_max || 8} min</div>`
+    ${M.presencia_on === true ? `<div class="msg">Activo ${M.presencia_desde && M.presencia_desde === M.presencia_hasta ? 'todo el día (desde las ' + esc(M.presencia_desde) + ')' : 'de ' + esc(M.presencia_desde || '00:00') + ' a ' + esc(M.presencia_hasta || '06:00')} · ${+(M.presencia_bloque_h ?? 2) ? 'una al azar cada ' + (M.presencia_bloque_h ?? 2) + ' h' : (+M.presencia_n || 3) + ' verificaciones'} · respuesta máxima ${+M.presencia_max || 8} min</div>`
       : `<div class="msg bad">El control nocturno está apagado en ${esc(ed)}. Actívalo en Celulares corporativos > Ajustes > Control nocturno y recordatorios.</div>`}
     <div class="row" style="gap:8px;align-items:center;margin:10px 0"><button class="btn" id="nocAnt" aria-label="Noche anterior">‹</button>
       <input id="nocDia" class="inp" type="date" value="${esc(n)}" style="flex:1"><button class="btn" id="nocSig" aria-label="Noche siguiente">›</button></div>
