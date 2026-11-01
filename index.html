@@ -1648,7 +1648,7 @@ const PanelHoras = {
     }
     for (const b of validos) if (!tomados.has(b) && !franq(b)) this._inicioSinRelevo(b, tol, unGuardia);
   },
-  /* Relevo entre dos FIJOS: siempre en espejo (+ para uno, − para el otro) */
+  /* Relevo entre dos FIJOS: solo cuenta el atraso del que entra, en espejo (+ para el que esperó, − para el que llegó tarde) */
   _relevo(a, b, p, tol){
     const entra = b.inicio, sale = a.fin;
     if (entra > p) {
@@ -1659,13 +1659,7 @@ const PanelHoras = {
       }
       if (sale < entra && this._h(entra, sale) > tol) a.notas.push('Se fue antes de que llegara su relevo: ' + Turnos.duracion(minEntre(entra, sale)) + ' sin cubrir');
     }
-    if (sale < p) {
-      const cubrio = this._h(p, entra > sale ? entra : sale);
-      if (cubrio > tol) {
-        b.movimientos.push({programado: p, mes: a.progInicio, real: entra, horas: cubrio, motivo: 'Entró antes y lo cubrió', con: a.guardia});
-        a.movimientos.push({programado: p, mes: a.progInicio, real: sale, horas: -cubrio, motivo: 'Salió antes del relevo', con: b.guardia});
-      }
-    }
+    /* Llegar antes NO suma: el turno vale la hora configurada (7 a 7, 8 a 8...). */
   },
   /* Sin relevo registrado no hay a quién cargarle la diferencia: no cuenta (queda la nota) */
   _finSinRelevo(a, tol, cuenta = false){
@@ -1879,12 +1873,33 @@ async function eventosTurnoMes(ed, y, m){
   return [...turnos, ...corr];
 }
 
+/* Puesto de cada turno: el BLOQUE del guardia fijo, no el celular. Si el
+   celular se reinstala o se cambia a mitad de mes, su identificador cambia y
+   los relevos dejaban de emparejarse (horas en 0). "Bloque A" = "A".
+   Franqueros: toman el bloque del celular donde marcaron (según los fijos).
+   Edificio sin bloques: un solo puesto. */
+const normBloque = b => String(b || '').replace(/\b(bloque|torre|blq)\b\.?/gi, '').replace(/\s+/g, ' ').trim().toUpperCase();
+function asignarPuestos(ev, registro){
+  const fijos = [...registro.values()].filter(g => g.turno !== 'FRANQUERO');
+  const bloqueDe = new Map(fijos.map(g => [g.ci, normBloque(g.bloque)]));
+  const activos = fijos.filter(g => g.activo), conBloque = activos.filter(g => normBloque(g.bloque)).length;
+  if(conBloque && conBloque < activos.length) return;  /* configuración a medias: se deja como estaba */
+  const ciDe = e => { let d = e.detalle; if(typeof d === 'string'){ try{ d = JSON.parse(d); }catch(_){ d = {}; } } return limpiarCi((d || {}).guard_ci); };
+  if(!conBloque){ for(const e of ev) e.unit_id = 'puesto-unico'; return; }
+  const votos = new Map();
+  for(const e of ev){ const b = bloqueDe.get(ciDe(e)); if(!b || !e.device_id) continue;
+    const v = votos.get(e.device_id) || {}; v[b] = (v[b] || 0) + 1; votos.set(e.device_id, v); }
+  const devBloque = new Map([...votos].map(([d, v]) => [d, Object.entries(v).sort((a, b) => b[1] - a[1])[0][0]]));
+  for(const e of ev){ const b = bloqueDe.get(ciDe(e)) || devBloque.get(e.device_id); if(b) e.unit_id = 'bloque-' + b; }
+}
+
 /* Horas del mes por guardia (CI) con el mismo cálculo de la app */
 async function horasDelMes(ed, y, m, registro, cfg){
   const ev = await eventosTurnoMes(ed, y, m);
   const soloCi = registro.size > 0;
   /* franqueros (registrados o dados de baja): no suman ni restan horas extras */
   const franqueros = new Set([...registro.values()].filter(g => g.turno === 'FRANQUERO').map(g => g.ci));
+  asignarPuestos(ev, registro);
   const puestos = PanelHoras.panelMes(ev, y, m, {toleranciaMin: cfg.tolerancia, soloConGuardia: soloCi, franqueros, unGuardia: cfg.unGuardia});
   return PanelHoras.porGuardia(puestos);
 }
@@ -3564,7 +3579,7 @@ async function generarInforme(){
         didParseCell: c => { if(c.section === 'body' && s.k === 'jornadas' && c.column.dataKey === 'firma'){ c.cell.styles.minCellHeight = 16; if(c.cell.raw === 'Sin firma'){ c.cell.styles.textColor = [150, 40, 40]; } } if(c.section === 'body' && s.k === 'visitas' && c.column.dataKey === 'devolvio' && c.cell.raw === 'NO'){ c.cell.styles.textColor = [200, 30, 30]; c.cell.styles.fontStyle = 'bold'; } },
       });
       y = doc.lastAutoTable.finalY + 11;
-      if(s.k === 'horas' && cfg) notas.push(cfg.unGuardia ? `Edificio de un solo guardia: las horas extras se cuentan contra su propio horario de relevo (quedarse después suma; llegar tarde o irse antes resta). Turno de 36 h: cuenta como día extra trabajado. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.` : `Horas extras solo entre los guardias fijos (diurno y nocturno), en espejo: lo que uno tiene a favor el otro lo tiene en contra (relevos con atraso o salida anticipada). Los franqueros no suman ni restan. Turno de 24 h: sale a la misma hora del día siguiente; turno de 36 h: cuenta como día extra trabajado, no como horas extras. El mes empieza con el diurno del día 1 y termina con el nocturno del último día. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.`);
+      if(s.k === 'horas' && cfg) notas.push(cfg.unGuardia ? `Edificio de un solo guardia: las horas extras se cuentan contra su propio horario de relevo (quedarse después suma; llegar tarde o irse antes resta). Turno de 36 h: cuenta como día extra trabajado. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.` : `Horas extras solo entre los guardias fijos (diurno y nocturno), en espejo: lo que uno tiene a favor el otro lo tiene en contra (solo cuando el relevo llega tarde; llegar antes no suma: vale la hora configurada). Los franqueros no suman ni restan. Turno de 24 h: sale a la misma hora del día siguiente; turno de 36 h: cuenta como día extra trabajado, no como horas extras. El mes empieza con el diurno del día 1 y termina con el nocturno del último día. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.`);
     }
     if(notas.length){
       if(y > H - 25) nuevaPagina();
