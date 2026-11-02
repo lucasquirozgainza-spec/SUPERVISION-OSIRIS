@@ -3595,6 +3595,7 @@ async function generarInforme(){
 
     /* Carta de resumen (1.ª página, carta vertical): lo esencial del mes en una hoja */
     const conCarta = P.carta !== false;
+    let hojasCarta = 0;
     if(conCarta){
       const fmt = PAPELES[P.papel].f;
       doc.addPage(fmt, 'portrait');
@@ -3610,7 +3611,7 @@ async function generarInforme(){
       txt('', 10.5, 'bold', COLOR_TITULO); doc.text(pdfTxt(`Ref.: Informe del servicio de seguridad - ${MES_L}`), mx, cy);
       doc.setDrawColor(...COLOR_MARCA); doc.setLineWidth(0.3); doc.line(mx, cy + 1.6, mx + doc.getTextWidth(pdfTxt(`Ref.: Informe del servicio de seguridad - ${MES_L}`)), cy + 1.6); cy += 9;
       const totalPag = doc.internal.getNumberOfPages() - 1;
-      parrafo(`De nuestra consideración: por medio de la presente les hacemos llegar el resumen del servicio de seguridad prestado en ${ed} durante ${MES_L}. El detalle de cada registro (con fecha, hora y responsable) se adjunta como respaldo en las ${totalPag} página${totalPag === 1 ? '' : 's'} siguientes.`);
+      parrafo(`De nuestra consideración: por medio de la presente les hacemos llegar el resumen del servicio de seguridad prestado en ${ed} durante ${MES_L}. El detalle de cada registro (con fecha, hora y responsable) se adjunta como respaldo en las ${totalPag} página${totalPag === 1 ? '' : 's'} de detalle a continuación.`);
       /* cifras del mes (salen de las mismas filas del respaldo) */
       const diasMes = new Date(mes.y, mes.m + 1, 0).getDate();
       const ahoraD = new Date(), finMes = new Date(mes.y, mes.m + 1, 1);
@@ -3634,59 +3635,68 @@ async function generarInforme(){
           columnStyles: {1: {halign: 'center', fontStyle: 'bold', cellWidth: 20}, 2: {textColor: gris}}});
         cy = doc.lastAutoTable.finalY + 7;
       }
-      /* incidentes: los más recientes, en una línea cada uno */
+      /* si no entra, la carta sigue en otra hoja vertical (nunca se corta nada) */
+      const primeraCarta = doc.internal.getNumberOfPages();
+      const necesito = h => { if(cy + h > ph - 18){ doc.addPage(fmt, 'portrait'); cy = 36; } };
+      const parrafoLargo = (t, size = 9.5) => { txt('', size); const lh = size * 0.3528 * 1.35;
+        for(const l of doc.splitTextToSize(pdfTxt(t), ancho)){ necesito(lh); txt('', size); doc.text(l, mx, cy); cy += lh; } cy += 3; };
+      const titulo = t => { necesito(14); txt('', 11, 'bold', COLOR_TITULO); doc.text(t, mx, cy); cy += 5.5; };
+      /* incidentes: TODOS, completos */
       if(datos.incid){
-        txt('', 11, 'bold', COLOR_TITULO); doc.text('Incidentes del mes', mx, cy); cy += 5.5;
-        if(!datos.incid.length) parrafo('No se registraron incidentes en el mes.', 10);
+        titulo('Incidentes del mes');
+        if(!datos.incid.length) parrafoLargo('No se registraron incidentes en el mes.', 10);
         else {
-          const max = 6, lista = datos.incid.slice(-max);
-          for(const r of lista){
+          for(const r of datos.incid){
             txt('', 9.5);
-            const l = doc.splitTextToSize(pdfTxt(`- ${r.fecha} ${r.hora}: ${r.tipo}${r.lugar ? ' en ' + r.lugar : ''}${r.detalle ? '. ' + r.detalle : ''}`), ancho).slice(0, 2);
-            doc.text(l, mx, cy, {lineHeightFactor: 1.3}); cy += l.length * 4.4 + 1;
+            const ls = doc.splitTextToSize(pdfTxt(`- ${r.fecha} ${r.hora}: ${r.tipo}${r.lugar ? ' en ' + r.lugar : ''}${r.detalle ? '. ' + r.detalle : ''}${r.registro ? ' (registró ' + r.registro + ')' : ''}`), ancho);
+            necesito(Math.min(ls.length, 6) * 4.4);   /* cada incidente entero en la misma hoja */
+            for(const l of ls){ necesito(4.4); txt('', 9.5); doc.text(l, mx, cy); cy += 4.4; }
+            cy += 1.2;
           }
-          if(datos.incid.length > max){ txt('', 9, 'italic', gris); doc.text(pdfTxt(`... y ${datos.incid.length - max} más (ver la sección Incidentes).`), mx, cy); cy += 5; }
           cy += 2;
         }
       }
       /* personal */
-      if(datos.horas && datos.horas.length && cy < ph - 70){
-        txt('', 11, 'bold', COLOR_TITULO); doc.text('Personal de seguridad', mx, cy); cy += 5.5;
-        const per = datos.horas.map(r => `${r.guardia}${r.turno ? ' (' + r.turno.toLowerCase() + ')' : ''}: ${r.dias} día${r.dias === '1' ? '' : 's'}`).join('; ') + '.';
-        parrafo(per, 9.5);
+      if(datos.horas && datos.horas.length){
+        titulo('Personal de seguridad');
+        parrafoLargo(datos.horas.map(r => `${r.guardia}${r.turno ? ' (' + r.turno.toLowerCase() + ')' : ''}: ${r.dias} día${r.dias === '1' ? '' : 's'}`).join('; ') + '.');
       }
-      if(datos.advert && datos.advert.length && cy < ph - 60){
+      if(datos.advert && datos.advert.length){
         const cuenta = {}; for(const r of datos.advert) cuenta[r.tipo] = (cuenta[r.tipo] || 0) + 1;
-        parrafo('Observaciones al personal: ' + Object.entries(cuenta).map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ') + '. Cada caso queda detallado en el respaldo.', 9.5);
+        parrafoLargo('Observaciones al personal: ' + Object.entries(cuenta).map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ') + '. Cada caso queda detallado en el respaldo.');
       }
-      cy = Math.max(cy + 2, Math.min(cy + 6, ph - 52));
-      parrafo('Quedamos a su disposición para cualquier consulta o aclaración. Sin otro particular, saludamos a ustedes muy atentamente.');
-      const fy = Math.min(Math.max(cy + 22, ph - 40), ph - 24);
+      /* cierre y firma juntos (si no entran, pasan enteros a la hoja siguiente) */
+      if(cy + 45 > ph - 12){ doc.addPage(fmt, 'portrait'); cy = 36; }
+      parrafoLargo('Quedamos a su disposición para cualquier consulta o aclaración. Sin otro particular, saludamos a ustedes muy atentamente.', 10.5);
+      const fy = Math.min(cy + 22, ph - 22);
       /* sello de tinta sobre la línea de firma */
       try{ const sw = 40, sh = sw / SELLO_TINTA_AR; doc.addImage(SELLO_TINTA, 'PNG', pw / 2 + 4, fy - sh + 9, sw, sh); }catch(_){}
       doc.setDrawColor(120); doc.setLineWidth(0.3); doc.line(pw / 2 - 32, fy, pw / 2 + 32, fy);
       txt('', 10.5, 'bold', COLOR_TITULO); doc.text('Supervisión', pw / 2, fy + 5, {align: 'center'});
       txt('', 9.5, 'normal', gris); doc.text('OSIRIS Security', pw / 2, fy + 10, {align: 'center'});
-      doc.movePage(doc.internal.getNumberOfPages(), 1);
+      /* las hojas de la carta pasan al principio, en orden */
+      const ultima = doc.internal.getNumberOfPages();
+      hojasCarta = ultima - primeraCarta + 1;
+      for(let k = 0; k < hojasCarta; k++) doc.movePage(primeraCarta + k, 1 + k);
     }
 
     /* Franja con logo en cada página y pie */
     const n = doc.internal.getNumberOfPages(), ahora = new Date();
     for(let i = 1; i <= n; i++){
       doc.setPage(i);
-      if(conCarta && i === 1){
+      if(i <= hojasCarta){
         /* carta: membrete simple y pie, en vertical */
         const pw = doc.internal.pageSize.getWidth(), ph = doc.internal.pageSize.getHeight();
         doc.setFillColor(...COLOR_MARCA); doc.rect(0, 0, pw, 24, 'F');
         try{ doc.addImage(LOGO_OSIRIS, 'PNG', 22, 3.2, 37, 17.4); }catch(_){}
         doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-        doc.text('Resumen del mes', pw - 22, 11, {align:'right'});
+        doc.text(i === 1 ? 'Resumen del mes' : 'Resumen del mes (continuación)', pw - 22, 11, {align:'right'});
         doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
         doc.text(pdfTxt(`${ed}  |  ${mesTxt(mes)}`), pw - 22, 17.5, {align:'right'});
         doc.setDrawColor(...linea); doc.line(22, ph - 10, pw - 22, ph - 10);
         doc.setFontSize(7.5); doc.setTextColor(...gris);
         doc.text(pdfTxt(`OSIRIS Security  -  Generado el ${fDia(ahora)} a las ${fHora(ahora)}`), 22, ph - 6);
-        doc.text(`Página 1 de ${n}`, pw - 22, ph - 6, {align:'right'});
+        doc.text(`Página ${i} de ${n}`, pw - 22, ph - 6, {align:'right'});
         continue;
       }
       doc.setFillColor(...COLOR_MARCA); doc.rect(0, 0, W, 24, 'F');
