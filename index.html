@@ -3279,7 +3279,36 @@ function limpiarTexto(t){
   x = x.replace(/([.!?]\s+)([a-záéíóúñ])/g, (m, a, b) => a + b.toUpperCase());
   return x;
 }
-async function corregirOrtografia(textos){
+/* Nombres propios: si una palabra coincide con un nombre conocido del edificio
+   (guardias, propietarios, residentes, visitantes) o va después de "sr.",
+   "sra.", "don", "doña", "lic."... se escribe con mayúscula. Las que también
+   son palabras comunes (luz, paz, rosa, flores...) solo si van junto a otro nombre. */
+const NOMBRE_COMUN = new Set(['luz','paz','mar','sol','rosa','cruz','flores','rosario','dolores','mercedes','pilar','angeles','consuelo','esperanza',
+  'gloria','victoria','blanca','leon','campos','rios','montes','vega','mora','castillo','torres','ramos','prado','rubio','santos','salvador','soledad',
+  'amparo','cielo','alba','nieves','franco','delgado','moreno','blanco','calle','iglesias','puerta','parra','marin','bueno','leal','toro','lobo',
+  'conde','duque','rey','reyes','santa','san','silva','paredes','cuevas','ventura','fuentes','arenas','prieto','cortes','miranda','medina','luna','jesus']);
+const TITULOS_P = new Set(['sr','sra','srta','señor','señora','señorita','don','doña','lic','licenciado','licenciada','dr','dra','doctor','doctora','ing','ingeniero','ingeniera','arq','profe','profesor','profesora']);
+const sinTildeN = w => w.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function mayusculasNombres(t, nombres){
+  const ps = t.split(/(\s+)/);
+  const pal = i => (ps[i] || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+  const esNombre = i => { const w = sinTildeN(pal(i)); return w.length >= 3 && nombres.has(w); };
+  for(let i = 0; i < ps.length; i += 2){
+    const w = pal(i); if(!w || w[0] !== w[0].toLowerCase()) continue;
+    const k = sinTildeN(w), prev = sinTildeN(pal(i - 2)).replace(/\.$/, '');
+    const trasTitulo = TITULOS_P.has(prev) || (TITULOS_P.has(sinTildeN(pal(i - 4))) && esNombre(i - 2));
+    let ok = false;
+    if(trasTitulo && w.length >= 2) ok = true;
+    else if(esNombre(i)) ok = !NOMBRE_COMUN.has(k) || esNombre(i - 2) || esNombre(i + 2);
+    if(ok) ps[i] = ps[i].replace(w, w[0].toUpperCase() + w.slice(1));
+  }
+  const ABR = {sr:'Sr.', sra:'Sra.', srta:'Srta.', lic:'Lic.', dr:'Dr.', dra:'Dra.', ing:'Ing.', arq:'Arq.'};
+  return ps.join('').replace(/\b(sr|sra|srta|lic|dr|dra|ing|arq)\b\.?(?=\s+[A-ZÁÉÍÓÚÑ])/gi, m => ABR[m.replace('.', '').toLowerCase()] || m);
+}
+async function corregirOrtografia(textos, nombresLista = []){
+  const nombres = new Set();
+  for(const n of nombresLista) for(const w of String(n || '').split(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/)) if(w.length >= 3) nombres.add(sinTildeN(w));
+  for(const x of ['de','del','la','las','los','por','para','con','sin','que','una','uno','the']) nombres.delete(x);
   const base = textos.map(limpiarTexto);
   const SEP = '\n\n¶\n\n';
   const out = [...base];
@@ -3294,7 +3323,7 @@ async function corregirOrtografia(textos){
       const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000);
       const r = await fetch('https://api.languagetool.org/v2/check', {method: 'POST', signal: ctl.signal,
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({language: 'es', text: texto, level: 'default'})});
+        body: new URLSearchParams({language: 'es', text: texto, level: 'picky'})});
       clearTimeout(to);
       if(!r.ok) continue;
       const j = await r.json();
@@ -3304,11 +3333,15 @@ async function corregirOrtografia(textos){
         const rep = m.replacements && m.replacements[0] && m.replacements[0].value;
         if(!rep) continue;
         const tipo = (m.rule && m.rule.issueType) || '', cat = (m.rule && m.rule.category && m.rule.category.id) || '';
-        if(!(tipo === 'misspelling' || tipo === 'typographical' || cat === 'TYPOS' || cat === 'DIACRITICS' || cat === 'CASING')) continue;
         const orig = texto.substr(m.offset, m.length);
+        /* puntuación: solo si el cambio es agregar o quitar comas, puntos, signos o espacios */
+        const soloSignos = x => sinTildeN(x).replace(/[\s,.;:¡!¿?]/g, '');
+        const esPuntuacion = (cat === 'PUNCTUATION' || cat === 'TYPOGRAPHY' || tipo === 'typographical') && soloSignos(orig) === soloSignos(rep);
+        if(!(esPuntuacion || tipo === 'misspelling' || cat === 'TYPOS' || cat === 'DIACRITICS' || cat === 'CASING')) continue;
         if(orig.includes('¶') || rep.includes('¶')) continue;
-        if(/\d/.test(orig) || orig.length < 2) continue;                       /* deptos, placas, horas */
+        if(!esPuntuacion && (/\d/.test(orig) || orig.length < 2)) continue;   /* deptos, placas, horas */
         if(/^[A-ZÁÉÍÓÚÑ]{2,}$/.test(orig)) continue;                            /* siglas: CRE, SAGUAPAC */
+        if(!esPuntuacion && nombres.has(sinTildeN(orig)) && sinTildeN(orig) !== sinTildeN(rep)) continue;   /* nombre conocido: solo tildes */
         const nombre = /^[A-ZÁÉÍÓÚÑ]/.test(orig) && !/(^|[.!?]\s*)$/.test(texto.slice(Math.max(0, m.offset - 3), m.offset));
         if(nombre && sinTilde(orig) !== sinTilde(rep)) continue;                /* nombre propio: solo tildes */
         if(rep.split(' ').length > orig.split(' ').length + 1) continue;        /* nunca agrega frases */
@@ -3320,7 +3353,7 @@ async function corregirOrtografia(textos){
       if(partes.length === idx.length) idx.forEach((i, k) => out[i] = partes[k]);
     }catch(_){ /* sin conexión o servicio caído: queda el texto limpio original */ }
   }
-  return out;
+  return out.map(t => mayusculasNombres(t, nombres));
 }
 
 /* ===================== INFORME MENSUAL EN PDF (solo supervisión) ===================== */
@@ -3700,7 +3733,16 @@ async function generarInforme(){
       /* incidentes: TODOS, completos y con la ortografía corregida (sin cambiar lo que pasó) */
       if(datos.incid && datos.incid.length){
         paso('Revisando la ortografía de los incidentes…');
-        const n0 = datos.incid.length, cor = await corregirOrtografia([...datos.incid.map(r => r.detalle || ''), ...datos.incid.map(r => r.lugar || '')]);
+        const nombresConocidos = [...(datos.visitas || []).map(r => r.visitante), ...ev.map(x => x.g)];
+        try{
+          const reg = await leerRegistro(ed); for(const g of reg.values()) nombresConocidos.push(g.nombre);
+          for(const clase of ['propietarios', 'residentes']){
+            const r = await api('eventos?select=detalle&tipo=eq.Datos&edificio=eq.' + enc(ed) + '&detalle->>clase=eq.' + clase + '&order=created_at.desc&limit=1');
+            const filas = r.length && Array.isArray(detalleDe(r[0]).filas) ? detalleDe(r[0]).filas : [];
+            for(const f of filas) nombresConocidos.push(f.copropietario, f.inquilino, f.nombre, f.propietario);
+          }
+        }catch(_){}
+        const n0 = datos.incid.length, cor = await corregirOrtografia([...datos.incid.map(r => r.detalle || ''), ...datos.incid.map(r => r.lugar || '')], nombresConocidos);
         datos.incid.forEach((r, k) => { r._detalleCarta = cor[k]; r._lugarCarta = cor[n0 + k]; });
       }
       if(datos.incid){

@@ -976,27 +976,41 @@ function relevoCercano(t, hs){
       if(dif <= 360 && (!mejor || dif < Math.abs(t - mejor) / 60000)) mejor = c; } }
   return mejor;
 }
+/* "juan  perez de la cruz" -> "Juan Perez de la Cruz"; '' si no es nombre y apellido */
+function nombreCompleto(t){
+  const ps = String(t || '').trim().split(/\s+/).filter(Boolean), part = ['de', 'del', 'la', 'las', 'los', 'y'];
+  if(ps.some(w => !/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ'-]+$/.test(w))) return '';
+  if(ps.filter(w => !part.includes(w.toLowerCase()) && w.length >= 2).length < 2) return '';
+  return ps.map((w, i) => i && part.includes(w.toLowerCase()) ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
 function pTurno(){
   cabecera();
   if(!G.turno){
     const guardias = G.registro;
     $('#main').innerHTML = `<div class="card">
       <div class="field"><span>Guardia</span><select id="tG"><option value="">Elige tu nombre</option>${guardias.map(g => `<option value="${esc(g.ci)}">${esc(g.nombre)}${g.turno === 'FRANQUERO' ? ' (franquero)' : ''}</option>`).join('')}</select></div>
+      <div class="field" id="tNF" hidden><span>Tu nombre completo (obligatorio)</span><input id="tN" autocapitalize="words" autocomplete="name" placeholder="Nombre y apellido, ej. Juan Pérez Rojas"></div>
       ${guardias.length ? '' : '<div class="msg bad">No hay guardias registrados en este edificio. Pide a supervisión que te registre.</div>'}
       <div class="field"><span>Selfie de ingreso (obligatoria)</span><div class="zf" id="tF"></div></div>
       <div class="field"><span>Observaciones</span><textarea id="tO" placeholder="Opcional"></textarea></div>
       <button class="btn prim ok" id="tOk">Marcar ingreso</button></div>`;
     const z = zonaFotos('tF', {max:1, frontal:true, texto:'Selfie'}); z.pintar();
+    const esFranq = g => g && g.turno === 'FRANQUERO';
+    $('#tG').onchange = () => { $('#tNF').hidden = !esFranq(guardias.find(x => x.ci === $('#tG').value)); };
     $('#tOk').onclick = async () => {
-      const ci = $('#tG').value, g = guardias.find(x => x.ci === ci);
-      if(!g) return toast('Elige tu nombre', 'var(--bad)');
+      const ci = $('#tG').value, g0 = guardias.find(x => x.ci === ci);
+      if(!g0) return toast('Elige tu nombre', 'var(--bad)');
+      /* franquero: su nombre real va en todos los registros del turno */
+      let g = g0, real = '';
+      if(esFranq(g0)){ real = nombreCompleto(v('tN')); if(!real) return toast('Franquero: escribe tu nombre completo (nombre y apellido)', 'var(--bad)');
+        g = {...g0, nombre: real + ' (franquero)'}; }
       if(!z.fotos.length) return toast('La selfie es obligatoria', 'var(--bad)');
       ocupado($('#tOk'), true, 'Registrando…');
       const ahora = new Date(), ref = 'web_' + G.devId + '_t' + ahora.getTime();
       const relevos = relevosEdificio();
       G.turno = {ci: g.ci, nombre: g.nombre, ref, inicio: ahora.toISOString(), nivel: 12};
       guardarTurno();
-      await registrar('Ingreso de turno', {turno_ref: ref, ts: ahora.toISOString(), relevos, observaciones: v('tO'), guard_ci: g.ci}, {guardia: g.nombre});
+      await registrar('Ingreso de turno', {turno_ref: ref, ts: ahora.toISOString(), relevos, observaciones: v('tO'), guard_ci: g.ci, ...(real ? {franquero_nombre: real} : {})}, {guardia: g.nombre});
       await registrar('Foto de turno', {turno_ref: ref, momento: 'ingreso'}, {fotos: z.fotos, guardia: g.nombre, cals: ['registro']});
       /* aviso si entra tarde respecto al relevo (pasada la tolerancia) */
       const p = relevoCercano(ahora, relevos.split(','));
