@@ -3267,6 +3267,62 @@ const Cobros = (() => {
   return {pintar, letras, precargar, vigente: () => C.cargado && C.token === NUBE.id};
 })();
 
+/* Ortografía de lo que escriben los guardias (solo para la carta de resumen).
+   Corrige SOLO errores de escritura: letras, tildes, mayúsculas y espacios.
+   No cambia palabras por otras, ni el orden, ni el sentido. Nombres propios
+   (palabras con mayúscula, siglas, códigos con números) no se tocan.
+   Usa el corrector público LanguageTool; si no responde, queda el texto original. */
+function limpiarTexto(t){
+  let x = String(t || '').replace(/\s+/g, ' ').replace(/\s+([,.;:!?])/g, '$1').replace(/([,.;:!?])(?=[^\s\d.,])/g, '$1 ').trim();
+  if(!x) return x;
+  x = x.charAt(0).toUpperCase() + x.slice(1);
+  x = x.replace(/([.!?]\s+)([a-záéíóúñ])/g, (m, a, b) => a + b.toUpperCase());
+  return x;
+}
+async function corregirOrtografia(textos){
+  const base = textos.map(limpiarTexto);
+  const SEP = '\n\n¶\n\n';
+  const out = [...base];
+  /* de a bloques de ~15000 caracteres (límite del servicio) */
+  const grupos = []; let g = [], largo = 0;
+  base.forEach((t, i) => { if(largo + t.length > 15000 && g.length){ grupos.push(g); g = []; largo = 0; } g.push(i); largo += t.length + SEP.length; });
+  if(g.length) grupos.push(g);
+  for(const idx of grupos){
+    const texto = idx.map(i => base[i]).join(SEP);
+    if(!texto.trim()) continue;
+    try{
+      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch('https://api.languagetool.org/v2/check', {method: 'POST', signal: ctl.signal,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({language: 'es', text: texto, level: 'default'})});
+      clearTimeout(to);
+      if(!r.ok) continue;
+      const j = await r.json();
+      const sinTilde = w => w.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const cambios = [];
+      for(const m of (j.matches || [])){
+        const rep = m.replacements && m.replacements[0] && m.replacements[0].value;
+        if(!rep) continue;
+        const tipo = (m.rule && m.rule.issueType) || '', cat = (m.rule && m.rule.category && m.rule.category.id) || '';
+        if(!(tipo === 'misspelling' || tipo === 'typographical' || cat === 'TYPOS' || cat === 'DIACRITICS' || cat === 'CASING')) continue;
+        const orig = texto.substr(m.offset, m.length);
+        if(orig.includes('¶') || rep.includes('¶')) continue;
+        if(/\d/.test(orig) || orig.length < 2) continue;                       /* deptos, placas, horas */
+        if(/^[A-ZÁÉÍÓÚÑ]{2,}$/.test(orig)) continue;                            /* siglas: CRE, SAGUAPAC */
+        const nombre = /^[A-ZÁÉÍÓÚÑ]/.test(orig) && !/(^|[.!?]\s*)$/.test(texto.slice(Math.max(0, m.offset - 3), m.offset));
+        if(nombre && sinTilde(orig) !== sinTilde(rep)) continue;                /* nombre propio: solo tildes */
+        if(rep.split(' ').length > orig.split(' ').length + 1) continue;        /* nunca agrega frases */
+        cambios.push([m.offset, m.length, rep]);
+      }
+      let nuevo = texto;
+      for(const [o, l, rep] of cambios.sort((a, b) => b[0] - a[0])) nuevo = nuevo.slice(0, o) + rep + nuevo.slice(o + l);
+      const partes = nuevo.split(SEP);
+      if(partes.length === idx.length) idx.forEach((i, k) => out[i] = partes[k]);
+    }catch(_){ /* sin conexión o servicio caído: queda el texto limpio original */ }
+  }
+  return out;
+}
+
 /* ===================== INFORME MENSUAL EN PDF (solo supervisión) ===================== */
 const COLOR_MARCA = [73, 109, 127];          // #496d7f
 const COLOR_TITULO = [30, 50, 61];           // #1e323d: títulos y números, más oscuro para que resalten
@@ -3641,14 +3697,20 @@ async function generarInforme(){
       const parrafoLargo = (t, size = 9.5) => { txt('', size); const lh = size * 0.3528 * 1.35;
         for(const l of doc.splitTextToSize(pdfTxt(t), ancho)){ necesito(lh); txt('', size); doc.text(l, mx, cy); cy += lh; } cy += 3; };
       const titulo = t => { necesito(14); txt('', 11, 'bold', COLOR_TITULO); doc.text(t, mx, cy); cy += 5.5; };
-      /* incidentes: TODOS, completos */
+      /* incidentes: TODOS, completos y con la ortografía corregida (sin cambiar lo que pasó) */
+      if(datos.incid && datos.incid.length){
+        paso('Revisando la ortografía de los incidentes…');
+        const n0 = datos.incid.length, cor = await corregirOrtografia([...datos.incid.map(r => r.detalle || ''), ...datos.incid.map(r => r.lugar || '')]);
+        datos.incid.forEach((r, k) => { r._detalleCarta = cor[k]; r._lugarCarta = cor[n0 + k]; });
+      }
       if(datos.incid){
         titulo('Incidentes del mes');
         if(!datos.incid.length) parrafoLargo('No se registraron incidentes en el mes.', 10);
         else {
           for(const r of datos.incid){
             txt('', 9.5);
-            const ls = doc.splitTextToSize(pdfTxt(`- ${r.fecha} ${r.hora}: ${r.tipo}${r.lugar ? ' en ' + r.lugar : ''}${r.detalle ? '. ' + r.detalle : ''}${r.registro ? ' (registró ' + r.registro + ')' : ''}`), ancho);
+            const lugar = r._lugarCarta ?? r.lugar, det = String(r._detalleCarta ?? r.detalle ?? '').replace(/[.\s]+$/, '');
+            const ls = doc.splitTextToSize(pdfTxt(`- ${r.fecha} ${r.hora}: ${r.tipo}${lugar ? ' en ' + lugar : ''}${det ? '. ' + det + '.' : '.'}${r.registro ? ' (registró ' + r.registro + ')' : ''}`), ancho);
             necesito(Math.min(ls.length, 6) * 4.4);   /* cada incidente entero en la misma hoja */
             for(const l of ls){ necesito(4.4); txt('', 9.5); doc.text(l, mx, cy); cy += 4.4; }
             cy += 1.2;
