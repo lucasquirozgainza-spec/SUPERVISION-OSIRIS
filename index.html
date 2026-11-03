@@ -2405,7 +2405,11 @@ async function imprimirBoletas(lista, ed, nombre, msgBox){
     }
     const blob = doc.output('blob'), url = URL.createObjectURL(blob), nom = pdfTxt(nombre + '.pdf').replace(/[\\/:*?"<>|]/g, '-');
     if(msgBox) msgBox.innerHTML = `<div class="msg ok">PDF listo: ${lista.length} boleta${lista.length === 1 ? '' : 's'}.</div>
-      <a class="btn prim" style="display:block;text-align:center;text-decoration:none;margin-top:6px" href="${url}" download="${esc(nom)}" target="_blank" rel="noopener">Abrir / descargar</a>`;
+      <div class="acts" style="margin-top:6px"><a class="btn prim" style="text-align:center;text-decoration:none" href="${url}" target="_blank" rel="noopener">Ver PDF</a><button class="btn" id="bShareBol">Compartir</button></div>`;
+    const bt = msgBox && msgBox.querySelector('#bShareBol');
+    if(bt) bt.onclick = async () => { const f = new File([blob], nom, {type: 'application/pdf'});
+      if(navigator.canShare && navigator.canShare({files: [f]})){ try{ await navigator.share({files: [f], title: nom}); }catch(_){} }
+      else { const a = document.createElement('a'); a.href = url; a.download = nom; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 3000); } };
   }catch(e){ msg('No se pudo armar el PDF (' + esc(e.message) + ').', 'bad'); }
 }
 
@@ -2591,7 +2595,7 @@ async function pdfGuardia(ci){
     const nombre = pdfTxt(`Ficha ${g.nombre} ${mesTxt(D.mes)}.pdf`).replace(/[\\/:*?"<>|]/g, '-');
     const blob = doc.output('blob'), url = URL.createObjectURL(blob);
     GU.pdf = {blob, nombre};
-    box.innerHTML = `<div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${url}" download="${esc(nombre)}" target="_blank" rel="noopener">Abrir / descargar</a><button class="btn" id="gPdfShare">Compartir</button></div>`;
+    box.innerHTML = `<div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${url}" target="_blank" rel="noopener">Ver PDF</a><button class="btn" id="gPdfShare">Compartir</button></div>`;
   }catch(e){ box.innerHTML = `<div class="msg bad">No se pudo generar el PDF (${esc(e.message)}).</div>`; }
   finally{ btn.disabled = false; }
 }
@@ -3181,6 +3185,12 @@ const Cobros = (() => {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
     return null;
   }
+  /* "Ver PDF": se abre para mirarlo (no el menú de compartir) */
+  function ver(doc){
+    const url = URL.createObjectURL(doc.output('blob'));
+    const w = window.open(url, '_blank'); if(!w) location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  }
   let PREV_URL = null, PREV_T = null;
   function previa(caja, hacer){
     clearTimeout(PREV_T);
@@ -3262,7 +3272,7 @@ const Cobros = (() => {
     const [et, cl] = estado(n), recs = recibosDe(n.numero);
     hoja(`<h2>Nota N° ${num4(n.numero)}</h2><div class="sub">${esc(n.cliente ? n.cliente.nombre : '')} · ${esc(periodoTxt(n.periodo))}</div>
       ${kpis([[bsK(n.total), 'Total · Bs'], [bsK(pagado(n)), 'Cobrado · Bs'], [`<span class="pill ${cl}">${et}</span>`, 'Estado']])}
-      <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button>${saldo(n) > 0 ? '<button class="btn prim" id="vCob" style="background:var(--ok)">Registrar cobro</button>' : ''}</div>
+      <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button><button class="btn" id="vShare">Compartir</button>${saldo(n) > 0 ? '<button class="btn prim" id="vCob" style="background:var(--ok)">Registrar cobro</button>' : ''}</div>
       ${recs.length ? `<div class="h2">Recibos</div><div class="lista">${recs.map(r => `<div class="it${r.anulado ? ' anul' : ''}" data-rec="${r.numero}"><div class="t"><b>Recibo N° ${num4(r.numero)}</b><small>${esc(fechaCorta(r.fecha))} · ${esc(r.forma)}</small></div><div class="v"><span class="mon">Bs ${bs(r.monto)}</span><small><span class="pill ${r.anulado ? 'bad' : 'ok'}">${r.anulado ? 'Anulado' : 'Vigente'}</span></small></div></div>`).join('')}</div>` : ''}
       <div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div>
       <div class="h2">Otras acciones</div>
@@ -3281,7 +3291,8 @@ const Cobros = (() => {
         cerrarHoja(); repintar();
       }catch(e){ $('#vDel').disabled = false; $('#vMsg').innerHTML = `<div class="msg bad">No se pudo eliminar: ${esc(e.message)}</div>`; }
     };
-    $('#vPdf').onclick = () => { if(!window.jspdf) return $('#vMsg').innerHTML = '<div class="msg bad">Sin conexión: no se pudo cargar el PDF.</div>'; compartir(pdfNota(n), nombreNota(n)); };
+    $('#vPdf').onclick = () => { if(!window.jspdf) return $('#vMsg').innerHTML = '<div class="msg bad">Sin conexión: no se pudo cargar el PDF.</div>'; ver(pdfNota(n)); };
+    $('#vShare').onclick = () => { if(!window.jspdf) return $('#vMsg').innerHTML = '<div class="msg bad">Sin conexión: no se pudo cargar el PDF.</div>'; compartir(pdfNota(n), nombreNota(n)); };
     if($('#vCob')) $('#vCob').onclick = () => formRecibo(n);
     $('#panel').querySelectorAll('[data-rec]').forEach(el => el.onclick = () => { const r = C.recibos.find(x => +x.numero === +el.dataset.rec); if(r) verRecibo(r); });
   }
@@ -3390,13 +3401,14 @@ const Cobros = (() => {
     hoja(`<h2>Recibo N° ${num4(r.numero)}</h2><div class="sub">${esc(r.cliente ? r.cliente.nombre : r.de)} · ${esc(fechaLarga(r.fecha))}</div>
       ${r.anulado ? `<div class="msg bad">Anulado${r.fechaAnul ? ' el ' + esc(fechaLarga(r.fechaAnul)) : ''}${r.motivoAnul ? '. Motivo: ' + esc(r.motivoAnul) : ''}. No cuenta como pago${n ? ' de la nota N° ' + num4(n.numero) : ''}.</div>` : ''}
       ${kpis([[bsK(r.monto), 'Monto · Bs'], [esc(r.forma.split(' ')[0]), 'Forma'], [r.nota ? num4(r.nota) : 'Sin nota', 'Nota']])}
-      <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button>${r.anulado ? '' : '<button class="btn" id="vEdit">Editar</button>'}</div>
+      <div class="acts"><button class="btn prim" id="vPdf">Ver PDF</button><button class="btn" id="vShare">Compartir</button>${r.anulado ? '' : '<button class="btn" id="vEdit">Editar</button>'}</div>
       <div class="h2">Vista previa</div><div class="prevCaja" id="vPrev"></div>
       <div class="h2">Otras acciones</div>
       <div class="acts">${r.anulado ? '<button class="btn" id="vRest">Quitar anulación</button>' : '<button class="btn danger" id="vAnul">Anular recibo</button>'}<button class="btn danger" id="vDelR">Eliminar recibo</button></div>
       <div id="vMsg"></div>`);
     pdfListo().then(ok => { if(ok) previa($('#vPrev'), () => pdfRecibo(r)); });
-    $('#vPdf').onclick = () => { if(window.jspdf) compartir(pdfRecibo(r), nombreRecibo(r)); };
+    $('#vPdf').onclick = () => { if(window.jspdf) ver(pdfRecibo(r)); };
+    $('#vShare').onclick = () => { if(window.jspdf) compartir(pdfRecibo(r), nombreRecibo(r)); };
     const msg = (t, ok) => $('#vMsg').innerHTML = `<div class="msg ${ok ? '' : 'bad'}">${esc(t)}</div>`;
     const guardarEstado = async nuevo => {
       try{
@@ -4184,7 +4196,7 @@ async function generarInforme(){
     if(INF.url) URL.revokeObjectURL(INF.url);
     INF.url = URL.createObjectURL(INF.blob);
     res.innerHTML = `<div class="msg ok">Informe listo: ${n} página${n === 1 ? '' : 's'}${conCarta ? ' (carta de resumen + respaldo en hoja ' + esc(PAPELES[P.papel].t.toLowerCase()) + ' horizontal)' : ', hoja ' + esc(PAPELES[P.papel].t.toLowerCase()) + ' horizontal'}.</div>
-      <div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${INF.url}" download="${esc(INF.nombre)}" target="_blank" rel="noopener">Abrir / descargar</a>
+      <div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${INF.url}" target="_blank" rel="noopener">Ver PDF</a>
       <button class="btn prim" id="iShare">Compartir</button></div>`;
   }catch(e){
     res.innerHTML = `<div class="msg bad">No se pudo generar el informe (${esc(e.message)}). Revisa tu conexión e inténtalo de nuevo.</div>`;
@@ -5257,7 +5269,7 @@ async function generarCertificado(){
     if(INF.url) URL.revokeObjectURL(INF.url);
     INF.url = URL.createObjectURL(INF.blob);
     out.innerHTML = `<div class="msg ok">Certificado ${esc(numero)} listo: ${n} página${n === 1 ? '' : 's'}, ${elegidos.length} registro${elegidos.length === 1 ? '' : 's'}.</div>
-      <div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${INF.url}" download="${esc(INF.nombre)}" target="_blank" rel="noopener">Abrir / descargar</a>
+      <div class="acts"><a class="btn prim" style="text-align:center;text-decoration:none" href="${INF.url}" target="_blank" rel="noopener">Ver PDF</a>
       <button class="btn prim" id="bShare">Compartir</button></div>`;
     out.scrollIntoView({block:'center'});
   }catch(e){
