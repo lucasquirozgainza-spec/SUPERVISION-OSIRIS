@@ -2399,8 +2399,7 @@ async function imprimirBoletas(lista, ed, nombre, msgBox){
         doc.text('Recibí conforme', M + 41, fy + 4, {align: 'center'}); doc.text(pdfTxt(EMPRESA.razon || EMPRESA.comercial || 'Empleador'), W - M - 41, fy + 4, {align: 'center'});
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gris);
         doc.text(pdfTxt(`${b.nombre}  -  CI ${b.ci}`), M + 41, fy + 8, {align: 'center'}); doc.text(pdfTxt('Entregué conforme' + (EMPRESA.nit ? ' - NIT ' + EMPRESA.nit : '')), W - M - 41, fy + 8, {align: 'center'});
-        if(mitad && k === 0){ doc.setDrawColor(170); doc.setLineDashPattern([1.5, 1.5], 0); doc.line(6, alto, W - 6, alto); doc.setLineDashPattern([], 0);
-          doc.setFontSize(6.5); doc.setTextColor(150); doc.text('cortar aquí', W / 2, alto - 1, {align: 'center'}); }
+        if(mitad && k === 0){ doc.setDrawColor(170); doc.setLineDashPattern([1.5, 1.5], 0); doc.line(6, alto, W - 6, alto); doc.setLineDashPattern([], 0); }
         doc.setLineWidth(0.2);
       }
     }
