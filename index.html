@@ -2130,7 +2130,24 @@ function formGuardia(){
    y supervisión completa sueldo, bonos y descuentos. Se guarda en la nube
    (evento 'Boleta') y se imprime en carta: ORIGINAL arriba y COPIA abajo, con
    línea para la firma del guardia. */
-const BOL = {cache: new Map()};
+const BOL = {cache: new Map(), meses: new Map()};
+/* Datos del empleador que salen en cada boleta */
+const EMPRESA = {razon: 'OSIRISNEITH', comercial: 'OSIRIS SECURITY', nit: '8161022018', mteps: '8161022018-1', seprec: ''};
+/* Datos de horas de UN mes (la boleta se paga por el mes trabajado, no por el mes en curso) */
+async function datosGuardiasMes(ed, mes){
+  const k = ed + '|' + mes.y + '-' + mes.m;
+  if(GU.datos && GU.datos.ed === ed && GU.datos.mes.y === mes.y && GU.datos.mes.m === mes.m) return GU.datos;
+  if(BOL.meses.has(k)) return BOL.meses.get(k);
+  const [registro, cfg] = await Promise.all([leerRegistro(ed), leerConfig(ed)]);
+  const horas = await horasDelMes(ed, mes.y, mes.m, registro, cfg);
+  const D = {ed, mes, registro, cfg, horas}; BOL.meses.set(k, D); return D;
+}
+/* Mes que se paga por defecto: hasta el día 20 se paga el mes anterior */
+function mesDePago(){ const h = new Date(); return h.getDate() <= 20 ? {y: new Date(h.getFullYear(), h.getMonth() - 1, 1).getFullYear(), m: new Date(h.getFullYear(), h.getMonth() - 1, 1).getMonth()} : {y: h.getFullYear(), m: h.getMonth()}; }
+function opcionesMesPago(sel){ const h = new Date(); let o = '';
+  for(let i = 0; i < 6; i++){ const x = new Date(h.getFullYear(), h.getMonth() - i, 1); const v = x.getFullYear() + '-' + x.getMonth();
+    o += `<option value="${v}" ${x.getFullYear() === sel.y && x.getMonth() === sel.m ? 'selected' : ''}>${esc(mesTxt({y: x.getFullYear(), m: x.getMonth()}))}</option>`; }
+  return o; }
 const bsN = v => { const n = Math.round((+v || 0) * 100) / 100; return n.toLocaleString('es-BO', {minimumFractionDigits: 2, maximumFractionDigits: 2}); };
 const numV = v => { const n = parseFloat(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
 const mesClave = m => m.y + '-' + String(m.m + 1).padStart(2, '0');
@@ -2185,10 +2202,14 @@ function calcularBoleta(b){
   const totDes = des.reduce((a, x) => a + x[1], 0);
   return {ing, des, totIng, totDes, liquido: Math.round((totIng - totDes) * 100) / 100};
 }
-async function formBoleta(ci){
-  const D = GU.datos; const g = D && D.registro.get(ci); if(!g) return;
-  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Boleta de pago</h2><div class="sub">${esc(g.nombre)} · ${esc(mesTxt(D.mes))}</div><div class="carga" role="status" aria-label="Cargando"></div>`;
+async function formBoleta(ci, mesPago){
+  const D0 = GU.datos; const g0 = D0 && D0.registro.get(ci); if(!g0) return;
+  mesPago = mesPago || BOL.mesElegido || mesDePago();
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Boleta de pago</h2><div class="sub">${esc(g0.nombre)} · trabajo de ${esc(mesTxt(mesPago))}</div><div class="carga" role="status" aria-label="Cargando"></div>`;
   $('#sheet').classList.add('on');
+  let D;
+  try{ D = await datosGuardiasMes(D0.ed, mesPago); }catch(x){ $('#panel').innerHTML += `<div class="msg bad">No se pudo leer el mes (${esc(x.message)}).</div>`; return; }
+  const g = D.registro.get(ci) || g0;
   let previas = [];
   try{ previas = await leerBoletas(D.ed, ci); }catch(_){}
   const mk = mesClave(D.mes), guardada = previas.find(x => x.mes === mk), ultima = previas.find(x => x.mes !== mk) || {};
@@ -2202,7 +2223,8 @@ async function formBoleta(ci){
   const filas = (k, t) => `<div class="h2" style="margin-top:12px">${t}</div><div id="b_${k}L">${(b[k] || []).map((o, i) => filaExtra(k, i, o)).join('')}</div>
     <button class="btn chico" data-badd="${k}" style="margin-top:4px">${icono('mas1', 14)} Agregar</button>`;
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
-    <h2>Boleta de pago</h2><div class="sub">${esc(g.nombre)} · CI ${esc(g.ci)} · ${esc(mesTxt(D.mes))}${guardada ? ' · guardada' : ''}</div>
+    <h2>Boleta de pago</h2><div class="sub">${esc(g.nombre)} · CI ${esc(g.ci)}${guardada ? ' · guardada' : ''}</div>
+    <label class="field"><span>Mes trabajado que se paga</span><select id="bMes">${opcionesMesPago(D.mes)}</select></label>
     ${guardada ? '' : `<div class="msg">Se llenó con lo que registró la app este mes: ${auto.dias} días, ${auto.n24} dobles de 24 h, ${auto.n36} de 36 h, ${auto.faltas} falta(s)${auto.adelantos.length ? ', adelantos ' + esc(bsTxt(adelTot)) : ''}. Revisa y corrige lo que haga falta.</div>`}
     <div class="dos">${campo('cargo', 'Cargo', 'inputmode="text"')}${campo('fechaPago', 'Fecha de pago', 'type="date"')}</div>
     <div class="h2">Ingresos</div>
@@ -2240,6 +2262,7 @@ async function formBoleta(ci){
     const q = e.target.closest('[data-bquitar]'); if(q){ q.closest('[data-bfila]').remove(); totales(); return; }
   };
   $('#bVolver').onclick = () => detalleGuardia(ci);
+  $('#bMes').onchange = e => { const [y, m] = e.target.value.split('-').map(Number); BOL.mesElegido = {y, m}; formBoleta(ci, {y, m}); };
   const guardar = async imprimir => {
     const o = leer();
     if(!(numV(o.basico) > 0)) return $('#bMsg').innerHTML = '<div class="msg bad">Escribe el haber básico.</div>';
@@ -2264,8 +2287,10 @@ function filaExtra(k, i, o){
     <button class="btn chico" data-bquitar aria-label="Quitar">✕</button></div>`;
 }
 /* Panel del edificio: estado de las boletas del mes e impresión de todas */
-async function panelBoletas(){
-  const D = GU.datos; if(!D) return;
+async function panelBoletas(mesPago){
+  const D0 = GU.datos; if(!D0) return;
+  mesPago = mesPago || BOL.mesElegido || mesDePago();
+  let D; try{ D = await datosGuardiasMes(D0.ed, mesPago); }catch(_){ D = D0; }
   const act = [...D.registro.values()].filter(g => g.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Boletas de pago</h2><div class="sub">${esc(D.ed)} · ${esc(mesTxt(D.mes))}</div><div class="carga" role="status" aria-label="Cargando"></div>`;
   $('#sheet').classList.add('on');
@@ -2273,7 +2298,8 @@ async function panelBoletas(){
   for(const g of act){ let b = null; try{ b = (await leerBoletas(D.ed, g.ci)).find(x => x.mes === mk) || null; }catch(_){} est.push({g, b}); }
   const listas = est.filter(x => x.b);
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
-    <h2>Boletas de pago</h2><div class="sub">${esc(D.ed)} · ${esc(mesTxt(D.mes))}</div>
+    <h2>Boletas de pago</h2><div class="sub">${esc(D.ed)}</div>
+    <label class="field"><span>Mes trabajado que se paga</span><select id="bMesP">${opcionesMesPago(D.mes)}</select></label>
     ${info('Toca un guardia para llenar o corregir su boleta. Se llena sola con los días, turnos dobles, faltas, horas extras y adelantos que registró la app; el sueldo y los montos los pones tú (se recuerdan para el mes siguiente). Se imprime en hoja carta: original arriba y copia abajo, para que el guardia firme las dos.', 'Cómo funciona')}
     <div class="card">${est.map(x => `<div class="it" data-bol="${esc(x.g.ci)}" style="cursor:pointer"><div class="t"><b>${esc(x.g.nombre)}</b>
       <small>${esc(TURNO_TXT[x.g.turno] || x.g.turno)}${x.g.bloque ? ' · ' + esc(x.g.bloque) : ''} · ${x.b ? 'Líquido Bs ' + bsN(x.b.liquido) : 'Sin boleta este mes'}</small></div>
@@ -2281,10 +2307,11 @@ async function panelBoletas(){
     <div id="bMsg"></div>
     <button class="btn prim" id="bTodas" style="width:100%;margin-top:10px" ${listas.length ? '' : 'disabled'}>Imprimir todas las boletas listas (${listas.length})</button>`;
   $('#panel').onclick = async e => {
-    const it = e.target.closest('[data-bol]'); if(it) return formBoleta(it.dataset.bol);
+    const it = e.target.closest('[data-bol]'); if(it) return formBoleta(it.dataset.bol, D.mes);
     if(e.target.closest('#bTodas')) await imprimirBoletas(listas.map(x => x.b), D.ed, `Boletas ${D.ed} ${mesTxt(D.mes)}`, $('#bMsg'));
   };
   $('#panel').oninput = null;
+  $('#bMesP').onchange = e => { const [y, m] = e.target.value.split('-').map(Number); BOL.mesElegido = {y, m}; panelBoletas({y, m}); };
 }
 /* PDF: carta vertical, ORIGINAL arriba y COPIA abajo (o una hoja cada una si no entra) */
 async function imprimirBoletas(lista, ed, nombre, msgBox){
@@ -2297,7 +2324,7 @@ async function imprimirBoletas(lista, ed, nombre, msgBox){
     let primera = true;
     for(const b of lista){
       const c = calcularBoleta(b), filas = Math.max(c.ing.length, c.des.length);
-      const mitad = filas <= 6;                       /* entra media hoja por copia */
+      const mitad = filas <= 5;                       /* entra media hoja por copia */
       const alto = mitad ? H / 2 : H;
       for(const [k, etiqueta] of [[0, 'ORIGINAL - EMPRESA'], [1, 'COPIA - TRABAJADOR']]){
         if(!mitad || k === 0){ if(!primera) doc.addPage(); primera = false; }
@@ -2307,8 +2334,12 @@ async function imprimirBoletas(lista, ed, nombre, msgBox){
         try{ doc.addImage(LOGO_OSIRIS, 'PNG', M + 3, y + 1.5, 30, 14.1); }catch(_){}
         doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('BOLETA DE PAGO', W - M - 4, y + 7.5, {align: 'right'});
         const [yy, mm] = String(b.mes).split('-').map(Number);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pdfTxt(`${MESES[mm - 1]} de ${yy}  |  ${etiqueta}`), W - M - 4, y + 13, {align: 'right'});
-        y += 22;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pdfTxt(`Mes trabajado: ${MESES[mm - 1]} de ${yy}  |  ${etiqueta}`), W - M - 4, y + 13, {align: 'right'});
+        y += 21;
+        /* empleador */
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.6); doc.setTextColor(...gris);
+        doc.text(pdfTxt(`Empleador: ${EMPRESA.razon} (${EMPRESA.comercial})   NIT ${EMPRESA.nit}   Codigo MTEPS ${EMPRESA.mteps}${EMPRESA.seprec ? '   Matricula de Comercio ' + EMPRESA.seprec : ''}`), M, y);
+        y += 5;
         const dato = (t, v, x, w) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gris); doc.text(pdfTxt(t.toUpperCase()), x, y);
           doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...tinta); doc.text(doc.splitTextToSize(pdfTxt(v || '-'), w)[0], x, y + 4.5); };
         const cw = (W - 2 * M) / 4;
@@ -2338,9 +2369,9 @@ async function imprimirBoletas(lista, ed, nombre, msgBox){
         doc.line(M + 6, fy, M + 76, fy); doc.line(W - M - 76, fy, W - M - 6, fy);
         try{ const sw = 24, sh = sw / SELLO_TINTA_AR; doc.addImage(SELLO_TINTA, 'PNG', W - M - 66, fy - sh + 1, sw, sh); }catch(_){}
         doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...tinta);
-        doc.text('Recibí conforme', M + 41, fy + 4, {align: 'center'}); doc.text('OSIRIS Security', W - M - 41, fy + 4, {align: 'center'});
+        doc.text('Recibí conforme', M + 41, fy + 4, {align: 'center'}); doc.text(pdfTxt(EMPRESA.razon), W - M - 41, fy + 4, {align: 'center'});
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gris);
-        doc.text(pdfTxt(`${b.nombre}  -  CI ${b.ci}`), M + 41, fy + 8, {align: 'center'}); doc.text('Entregué conforme', W - M - 41, fy + 8, {align: 'center'});
+        doc.text(pdfTxt(`${b.nombre}  -  CI ${b.ci}`), M + 41, fy + 8, {align: 'center'}); doc.text(pdfTxt('Entregué conforme - NIT ' + EMPRESA.nit), W - M - 41, fy + 8, {align: 'center'});
         if(mitad && k === 0){ doc.setDrawColor(170); doc.setLineDashPattern([1.5, 1.5], 0); doc.line(6, alto, W - 6, alto); doc.setLineDashPattern([], 0);
           doc.setFontSize(6.5); doc.setTextColor(150); doc.text('cortar aquí', W / 2, alto - 1, {align: 'center'}); }
         doc.setLineWidth(0.2);
