@@ -790,6 +790,7 @@ const SECCIONES = [
   {k:'ingresos', t:'Ingresos',    tipos:['Ingreso de turno','Doblar turno']},
   {k:'salidas',  t:'Salidas',     tipos:['Salida de turno']},
   {k:'rondas',   t:'Rondas',      tipos:['Ronda']},
+  {k:'presencia',t:'Presencia',   tipos:['Presencia']},
   {k:'noved',    t:'Novedades',   tipos:['Incidente','Advertencia','Guardia sin uniforme']},
   {k:'visitas',  t:'Visitas',     tipos:['Visita','Salida de visita']},
   {k:'encom',    t:'Encomiendas', tipos:['Encomienda','Entrega de encomienda']},
@@ -797,7 +798,7 @@ const SECCIONES = [
 ];
 const OPERATIVOS = ['Ingreso de turno','Salida de turno','Doblar turno','Visita','Ronda','Incidente',
   'Encomienda','Hospedaje','Advertencia','Guardia sin uniforme',
-  'Salida de visita','Entrega de encomienda','Salida de hospedaje'];
+  'Salida de visita','Entrega de encomienda','Salida de hospedaje','Presencia'];
 /* Íconos (mismo trazo y tamaño en toda la página) */
 const ICONOS = {
   archivo:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
@@ -854,10 +855,12 @@ const ESTILO = {
   'Entrega de encomienda':{c:'#a16207',       i:'check', t:'Encomienda entregada'},
   'Salida de hospedaje':  {c:'#0d9488',       i:'salida', t:'Salida de hospedaje'},
   'Solicitud':            {c:'#6d4c41',       i:'informe', t:'Solicitud (adelanto / día libre)'},
+  'Presencia':            {c:'#7c3aed',       i:'reloj', t:'Control de presencia'},
 };
 /* Campos internos que no se muestran */
 const OCULTOS = new Set(['firma','fotos_tipo','fotos_gps','ruta','ruta_inicio','recorrido_m','uid','ts','guard_ci','guard_id','guard_uuid','turno_ref','device_id','foto_url','fotos_url',
-  'foto','foto_local','fotos_local','building_id','unit_id','id','edificio','guardia','eliminado','version','app','ref','cargo','relevos','sid']);
+  'foto','foto_local','fotos_local','building_id','unit_id','id','edificio','guardia','eliminado','version','app','ref','cargo','relevos','sid',
+  'pid','noche','programada','abierta','respondida','demora_s','max_min','foto_sha256','_sint','estado_p']);
 const ETIQUETAS = {
   fotos_en:'Fotos guardadas en', fotos:'Fotos tomadas',
   bloque:'Bloque', torre:'Torre', observaciones:'Observaciones', ubicacion:'Ubicación', nivel:'Nivel',
@@ -1059,6 +1062,41 @@ async function cargarConteos(){
   return out;
 }
 
+/* ---- Control de presencia en "En vivo" e informe ---- */
+/* miniatura liviana de una foto de la nube (para el PDF) */
+async function miniaturaFoto(url){
+  try{
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+    const b = await (await fetch(url, {signal: ctl.signal})).blob(); clearTimeout(to);
+    const im = await createImageBitmap(b), k = 220 / Math.max(im.width, im.height);
+    const cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+    cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+    return {url: cv.toDataURL('image/jpeg', 0.72), ar: cv.width / cv.height};
+  }catch(_){ return null; }
+}
+const durCorta = s => { s = Math.max(0, Math.round(+s || 0)); const m = Math.floor(s / 60); return m ? m + ' min ' + (s % 60 ? (s % 60) + ' s' : '') : (s % 60) + ' s'; };
+const hhmmP = t => { const x = fecha(t); return isNaN(x) ? '' : String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
+function presenciaTxt(d){
+  if(d._sint) return (d.estado_p === 'conexion' ? 'NO respondió (celular sin conexión)' : 'NO respondió') + ' · sonó a las ' + hhmmP(d.programada);
+  const tarde = d.estado === 'tardia';
+  return (tarde ? 'Respondió TARDE' : 'Respondió a tiempo') + (d.programada ? ' · sonó a las ' + hhmmP(d.programada) : '')
+    + (d.demora_s != null ? ' · reacción ' + durCorta(d.demora_s) : '');
+}
+/* Verificaciones sin responder del rango (no son eventos: salen del plan del celular) */
+async function presenciaSinRespuesta(ed, desde, hasta){
+  const q = '&edificio=eq.' + enc(ed) + '&created_at=gte.' + enc(new Date(+desde - 2 * 864e5).toISOString()) + (hasta ? '&created_at=lt.' + enc(new Date(+hasta + 864e5).toISOString()) : '');
+  const [planes, resp, pres] = await Promise.all([
+    api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.PresenciaPlan' + q + '&order=created_at.asc&limit=2000'),
+    api('eventos?select=created_at,guardia,device_id,detalle&tipo=eq.Presencia' + q + '&limit=3000'),
+    api('presencia?select=device_id,last_seen&edificio=eq.' + enc(ed) + '&limit=200').catch(() => []),
+  ]);
+  const porNoche = new Map();
+  for(const e of planes){ const k = detalleDe(e).noche || ''; if(!porNoche.has(k)) porNoche.set(k, []); porNoche.get(k).push(e); }
+  const todas = [];
+  for(const [k, ps] of porNoche) todas.push(...armarVerificaciones(ps, resp, pres, 8).map(x => ({...x, noche: k})));
+  return todas.filter(x => x.t >= desde && (!hasta || x.t < hasta));
+}
+
 async function cargarEventos(limite){
   const sec = SECCIONES.find(s => s.k === st.sec);
   const tipos = sec.tipos || OPERATIVOS;
@@ -1066,6 +1104,15 @@ async function cargarEventos(limite){
     + '&tipo=' + enc(inList(tipos)) + '&order=created_at.desc&limit=' + limite);
   await unirFotosTurno(rows);
   unirDobles(rows);
+  /* control de presencia: también las que sonaron y NO se respondieron */
+  if(tipos.includes('Presencia')){
+    try{
+      const r = rango();
+      for(const x of await presenciaSinRespuesta(st.edif, r.desde, r.hasta))
+        if(x.est === 'sin' || x.est === 'conexion') rows.push({id: 'p_' + x.pid, created_at: x.t.toISOString(), tipo: 'Presencia', edificio: st.edif, guardia: x.guardia,
+          detalle: {ts: x.t.toISOString(), programada: x.t.toISOString(), _sint: true, estado_p: x.est, puesto: x.puesto, guard_ci: x.ci}});
+    }catch(_){}
+  }
   return {hayMas: rows.length >= limite && limite < 1000,
           datos: rows.filter(enRango).sort((a,b) => horaReal(b) - horaReal(a))};
 }
@@ -1241,6 +1288,7 @@ function resumen(e, d){
   if(e.tipo === 'Encomienda' || e.tipo === 'Entrega de encomienda')
     return [d.depto ? 'Depto ' + d.depto : '', d.destinatario, d.empresa].filter(Boolean).join(' · ');
   if(e.tipo === 'Incidente') return [d.tipo, d.lugar, d.descripcion].filter(Boolean).join(' · ');
+  if(e.tipo === 'Presencia') return presenciaTxt(d);
   for(const k of RESUMEN) if(d[k] && !OCULTOS.has(k)) return valorTxt(d[k]);
   const c = camposVisibles(d).filter(([k]) => !['bloque','torre','relevos','nivel','ubicacion','cargo'].includes(k));
   return c.length ? c.slice(0,2).map(([k,v]) => (ETIQUETAS[k]||k) + ': ' + valorTxt(v)).join(' · ') : '';
@@ -2023,7 +2071,7 @@ function pintarGuardias(){
   };
   box.innerHTML = `
     <div class="shead"><div class="h2">Guardias · ${activos.length} activo${activos.length === 1 ? '' : 's'}</div>
-      <div class="sder">${info((D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.') + ' Un turno de 36 h cuenta como día extra, no como horas extras.' + ` Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.`, 'Cómo se calculan las horas')}<button class="btn chico" id="gNuevo">${icono('mas1', 15)} Registrar</button></div></div>
+      <div class="sder">${info((D.cfg.unGuardia ? 'Edificio de un solo guardia: las horas extras se cuentan contra su propio horario (quedarse después suma; llegar tarde o irse antes resta).' : 'Horas extras solo entre los fijos (diurno y nocturno) y en espejo: lo que uno tiene a favor, el otro lo tiene en contra. Los franqueros no suman ni restan.') + ' Un turno de 36 h cuenta como día extra, no como horas extras.' + ` Tolerancia de relevo: ${D.cfg.tolerancia} min. Los cambios de guardias llegan a los celulares del edificio en unos 10 minutos.`, 'Cómo se calculan las horas')}<button class="btn chico" id="gBoletas">${icono('informe', 15)} Boletas de pago</button><button class="btn chico" id="gNuevo">${icono('mas1', 15)} Registrar</button></div></div>
     ${activos.length ? activos.map(card).join('') : '<div class="card"><div class="empty">Sin guardias registrados.</div></div>'}
     ${bajas.length ? `<button class="btn more" id="gBajas">${GU.verBajas ? 'Ocultar' : 'Ver'} dados de baja (${bajas.length})</button>
       ${GU.verBajas ? bajas.map(card).join('') : ''}` : ''}
@@ -2032,6 +2080,7 @@ function pintarGuardias(){
 
 $('#v-gua').addEventListener('click', ev => {
   if(ev.target.id === 'gNuevo') return formGuardia();
+  if(ev.target.closest('#gBoletas')) return panelBoletas();
   if(ev.target.id === 'gBajas'){ GU.verBajas = !GU.verBajas; return pintarGuardias(); }
   const c = ev.target.closest('.gcard'); if(c) detalleGuardia(c.dataset.ci);
 });
@@ -2075,6 +2124,234 @@ function formGuardia(){
   };
 }
 
+/* ===================== BOLETAS DE PAGO (solo supervisión) =====================
+   Una boleta por guardia y por mes. Se arma con lo que ya sabe el monitor
+   (días trabajados, turnos dobles, faltas, horas extras, adelantos entregados)
+   y supervisión completa sueldo, bonos y descuentos. Se guarda en la nube
+   (evento 'Boleta') y se imprime en carta: ORIGINAL arriba y COPIA abajo, con
+   línea para la firma del guardia. */
+const BOL = {cache: new Map()};
+const bsN = v => { const n = Math.round((+v || 0) * 100) / 100; return n.toLocaleString('es-BO', {minimumFractionDigits: 2, maximumFractionDigits: 2}); };
+const numV = v => { const n = parseFloat(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
+const mesClave = m => m.y + '-' + String(m.m + 1).padStart(2, '0');
+/* 1234.5 -> "Mil doscientos treinta y cuatro 50/100 Bolivianos" */
+function montoEnLetras(v){
+  const U = ['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte',
+    'veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve'];
+  const D = ['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+  const C = ['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+  const cien = n => n === 100 ? 'cien' : (C[Math.floor(n / 100)] + ' ' + (n % 100 < 30 ? U[n % 100] : D[Math.floor(n % 100 / 10)] + (n % 10 ? ' y ' + U[n % 10] : ''))).trim();
+  const mil = n => { const m = Math.floor(n / 1000), r = n % 1000; return ((m ? (m === 1 ? 'mil' : cien(m) + ' mil') : '') + ' ' + (r ? cien(r) : '')).trim(); };
+  const ent = Math.floor(Math.abs(+v || 0)), cent = Math.round((Math.abs(+v || 0) - ent) * 100);
+  let t;
+  if(ent === 0) t = 'cero';
+  else if(ent < 1e6) t = mil(ent);
+  else { const mm = Math.floor(ent / 1e6); t = (mm === 1 ? 'un millón' : mil(mm) + ' millones') + (ent % 1e6 ? ' ' + mil(ent % 1e6) : ''); }
+  t = t.replace(/uno mil/g, 'un mil').replace(/veintiuno mil/g, 'veintiún mil').replace(/uno$/, 'uno');
+  return t.charAt(0).toUpperCase() + t.slice(1) + ' ' + String(cent).padStart(2, '0') + '/100 Bolivianos';
+}
+async function leerBoletas(ed, ci){
+  const k = ed + '|' + ci; if(BOL.cache.has(k)) return BOL.cache.get(k);
+  const r = await api('eventos?select=created_at,detalle&tipo=eq.Boleta&edificio=eq.' + enc(ed) + '&detalle->>ci=eq.' + enc(ci) + '&order=created_at.desc&limit=60');
+  const l = r.map(e => detalleDe(e)); BOL.cache.set(k, l); return l;
+}
+/* Datos que el monitor ya conoce del mes */
+function datosDelMes(D, g){
+  const r = D.horas.get(g.ci), m = resumenMes(D, g);
+  const adel = (SOL.lista || []).filter(x => x.ed === D.ed && (x.ci ? x.ci === g.ci : x.guardia === g.nombre) && x.clase === 'adelanto' && x.estado === 'confirmado'
+    && x.t.getFullYear() === D.mes.y && x.t.getMonth() === D.mes.m);
+  const fijo = g.turno === 'DIURNO' || g.turno === 'NOCTURNO';
+  return {dias: r ? r.dias : 0, n24: r ? r.n24 : 0, n36: r ? r.n36 : 0, saldo: r && fijo ? Math.round(r.saldo * 100) / 100 : 0,
+    faltas: fijo ? m.faltas : 0, permisos: fijo ? m.permisos : 0,
+    adelantos: adel.map(x => ({fecha: x.fechaEntrega || ymdLocal(x.t), monto: x.monto || 0}))};
+}
+/* Cálculo: filas de ingresos y descuentos + totales */
+function calcularBoleta(b){
+  const ing = [], des = [];
+  const add = (l, c, v) => { v = Math.round(v * 100) / 100; if(v) l.push([c, v]); };
+  const diaria = numV(b.basico) / 30;
+  add(ing, 'Haber básico', numV(b.basico));
+  add(ing, `Turnos dobles 24 h (${numV(b.n24)} x ${bsN(numV(b.pago24))})`, numV(b.n24) * numV(b.pago24));
+  add(ing, `Días extra 36 h (${numV(b.n36)} x ${bsN(numV(b.pago36))})`, numV(b.n36) * numV(b.pago36));
+  if(numV(b.horas) > 0) add(ing, `Horas extras (${numV(b.horas)} h x ${bsN(numV(b.pagoHora))})`, numV(b.horas) * numV(b.pagoHora));
+  for(const o of b.bonos || []) add(ing, o.c || 'Bono', numV(o.v));
+  add(des, 'Adelantos de sueldo', numV(b.adelantos));
+  add(des, `Faltas (${numV(b.faltas)} x ${bsN(b.descFalta !== '' && b.descFalta != null ? numV(b.descFalta) : diaria)})`,
+    numV(b.faltas) * (b.descFalta !== '' && b.descFalta != null ? numV(b.descFalta) : diaria));
+  if(numV(b.horas) < 0) add(des, `Horas en contra (${-numV(b.horas)} h x ${bsN(numV(b.pagoHora))})`, -numV(b.horas) * numV(b.pagoHora));
+  const totIng = ing.reduce((a, x) => a + x[1], 0);
+  if(numV(b.afp) > 0) add(des, `Aporte laboral (${numV(b.afp)} %)`, totIng * numV(b.afp) / 100);
+  for(const o of b.descuentos || []) add(des, o.c || 'Descuento', numV(o.v));
+  const totDes = des.reduce((a, x) => a + x[1], 0);
+  return {ing, des, totIng, totDes, liquido: Math.round((totIng - totDes) * 100) / 100};
+}
+async function formBoleta(ci){
+  const D = GU.datos; const g = D && D.registro.get(ci); if(!g) return;
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Boleta de pago</h2><div class="sub">${esc(g.nombre)} · ${esc(mesTxt(D.mes))}</div><div class="carga" role="status" aria-label="Cargando"></div>`;
+  $('#sheet').classList.add('on');
+  let previas = [];
+  try{ previas = await leerBoletas(D.ed, ci); }catch(_){}
+  const mk = mesClave(D.mes), guardada = previas.find(x => x.mes === mk), ultima = previas.find(x => x.mes !== mk) || {};
+  const auto = datosDelMes(D, g), adelTot = auto.adelantos.reduce((a, x) => a + x.monto, 0);
+  const b = guardada ? {...guardada} : {
+    basico: ultima.basico ?? '', pago24: ultima.pago24 ?? '', pago36: ultima.pago36 ?? '', pagoHora: ultima.pagoHora ?? '', descFalta: ultima.descFalta ?? '',
+    afp: ultima.afp ?? '', cargo: ultima.cargo || (g.turno === 'FRANQUERO' ? 'Franquero' : 'Guardia de seguridad'),
+    dias: auto.dias, n24: auto.n24, n36: auto.n36, horas: auto.saldo, faltas: auto.faltas, adelantos: adelTot,
+    bonos: (ultima.bonos || []).filter(o => o.fijo).map(o => ({...o})), descuentos: [], obs: '', fechaPago: ymdLocal(new Date())};
+  const campo = (k, t, extra = '', ayuda = '') => `<label class="field"><span>${t}</span><input id="b_${k}" value="${esc(b[k] ?? '')}" inputmode="decimal" autocomplete="off" ${extra}>${ayuda ? `<small style="color:var(--mute)">${ayuda}</small>` : ''}</label>`;
+  const filas = (k, t) => `<div class="h2" style="margin-top:12px">${t}</div><div id="b_${k}L">${(b[k] || []).map((o, i) => filaExtra(k, i, o)).join('')}</div>
+    <button class="btn chico" data-badd="${k}" style="margin-top:4px">${icono('mas1', 14)} Agregar</button>`;
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>Boleta de pago</h2><div class="sub">${esc(g.nombre)} · CI ${esc(g.ci)} · ${esc(mesTxt(D.mes))}${guardada ? ' · guardada' : ''}</div>
+    ${guardada ? '' : `<div class="msg">Se llenó con lo que registró la app este mes: ${auto.dias} días, ${auto.n24} dobles de 24 h, ${auto.n36} de 36 h, ${auto.faltas} falta(s)${auto.adelantos.length ? ', adelantos ' + esc(bsTxt(adelTot)) : ''}. Revisa y corrige lo que haga falta.</div>`}
+    <div class="dos">${campo('cargo', 'Cargo', 'inputmode="text"')}${campo('fechaPago', 'Fecha de pago', 'type="date"')}</div>
+    <div class="h2">Ingresos</div>
+    <div class="dos">${campo('basico', 'Haber básico mensual (Bs)')}${campo('dias', 'Días trabajados', '', 'Solo informativo')}</div>
+    <div class="dos">${campo('n24', 'Turnos dobles 24 h')}${campo('pago24', 'Pago por turno doble (Bs)')}</div>
+    <div class="dos">${campo('n36', 'Días extra (36 h)')}${campo('pago36', 'Pago por día extra (Bs)')}</div>
+    <div class="dos">${campo('horas', 'Horas extras (+) o en contra (-)')}${campo('pagoHora', 'Valor por hora (Bs)')}</div>
+    ${filas('bonos', 'Bonos y otros ingresos')}
+    <div class="h2">Descuentos</div>
+    <div class="dos">${campo('adelantos', 'Adelantos del mes (Bs)', '', auto.adelantos.length ? auto.adelantos.map(x => x.fecha.slice(8, 10) + '/' + x.fecha.slice(5, 7) + ': ' + bsTxt(x.monto)).join(' · ') : 'Sin adelantos entregados en el monitor')}${campo('afp', 'Aporte laboral (%)', '', 'Ej. 12,71 si aporta a la Gestora; vacío si no')}</div>
+    <div class="dos">${campo('faltas', 'Faltas (días)')}${campo('descFalta', 'Descuento por falta (Bs)', 'placeholder="Haber / 30"')}</div>
+    ${filas('descuentos', 'Otros descuentos (multas, uniforme…)')}
+    <label class="field" style="margin-top:12px"><span>Observaciones</span><input id="b_obs" value="${esc(b.obs || '')}" autocomplete="off"></label>
+    <div class="card" id="bTot" style="margin-top:10px"></div>
+    <div id="bMsg"></div>
+    <div class="acts"><button class="btn prim" id="bGuardar">Guardar e imprimir</button><button class="btn" id="bSolo">Solo guardar</button></div>
+    <button class="lnkbtn" id="bVolver" style="margin-top:10px">${icono('atras', 15)} Volver al guardia</button>`;
+  const leer = () => {
+    const o = {...b};
+    for(const k of ['cargo','fechaPago','basico','dias','n24','pago24','n36','pago36','horas','pagoHora','adelantos','afp','faltas','descFalta','obs']){ const el = $('#b_' + k); if(el) o[k] = el.value.trim(); }
+    for(const k of ['bonos','descuentos']) o[k] = [...document.querySelectorAll(`[data-bfila="${k}"]`)].map(f => ({c: f.querySelector('[data-bc]').value.trim(), v: f.querySelector('[data-bv]').value.trim(),
+      fijo: k === 'bonos' && f.querySelector('[data-bf]') ? f.querySelector('[data-bf]').checked : false})).filter(x => x.c || x.v);
+    return o;
+  };
+  const totales = () => { if(!$('#bTot')) return; const c = calcularBoleta(leer());
+    $('#bTot').innerHTML = `<div style="display:flex;justify-content:space-between"><span>Total ingresos</span><b>Bs ${bsN(c.totIng)}</b></div>
+      <div style="display:flex;justify-content:space-between"><span>Total descuentos</span><b>Bs ${bsN(c.totDes)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:18px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><span>Líquido pagable</span><b>Bs ${bsN(c.liquido)}</b></div>
+      <div style="font-size:12.5px;color:var(--mute);margin-top:4px">Son: ${esc(montoEnLetras(c.liquido))}</div>`; };
+  totales();
+  $('#panel').oninput = totales;
+  $('#panel').onclick = e => {
+    const a = e.target.closest('[data-badd]');
+    if(a){ const k = a.dataset.badd, L = $('#b_' + k + 'L'); L.insertAdjacentHTML('beforeend', filaExtra(k, L.children.length, {})); L.lastElementChild.querySelector('[data-bc]').focus(); return; }
+    const q = e.target.closest('[data-bquitar]'); if(q){ q.closest('[data-bfila]').remove(); totales(); return; }
+  };
+  $('#bVolver').onclick = () => detalleGuardia(ci);
+  const guardar = async imprimir => {
+    const o = leer();
+    if(!(numV(o.basico) > 0)) return $('#bMsg').innerHTML = '<div class="msg bad">Escribe el haber básico.</div>';
+    const c = calcularBoleta(o);
+    const det = {...o, ci: g.ci, nombre: g.nombre, turno: g.turno, bloque: g.bloque, mes: mk, totIng: c.totIng, totDes: c.totDes, liquido: c.liquido};
+    $('#bMsg').innerHTML = '<div class="msg">Guardando…</div>';
+    try{
+      await apiEscribir('POST', 'eventos', nuevoEvento('Boleta', D.ed, g.nombre, det));
+      BOL.cache.delete(D.ed + '|' + g.ci);
+      $('#bMsg').innerHTML = '<div class="msg ok">Boleta guardada.</div>';
+      if(imprimir) await imprimirBoletas([det], D.ed, `Boleta ${g.nombre} ${mesTxt(D.mes)}`, $('#bMsg'));
+    }catch(x){ $('#bMsg').innerHTML = `<div class="msg bad">No se pudo guardar: ${esc(x.message)}</div>`; }
+  };
+  $('#bGuardar').onclick = () => guardar(true);
+  $('#bSolo').onclick = () => guardar(false);
+}
+function filaExtra(k, i, o){
+  return `<div data-bfila="${k}" style="display:flex;gap:6px;align-items:center;margin:4px 0">
+    <input data-bc placeholder="${k === 'bonos' ? 'Concepto (ej. bono antigüedad)' : 'Concepto (ej. multa, uniforme)'}" value="${esc(o.c || '')}" style="flex:2;min-width:0" class="inp">
+    <input data-bv placeholder="Bs" inputmode="decimal" value="${esc(o.v || '')}" style="flex:1;min-width:0" class="inp">
+    ${k === 'bonos' ? `<label title="Repetir este bono los próximos meses" style="font-size:12px;display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox" data-bf ${o.fijo ? 'checked' : ''}>Fijo</label>` : ''}
+    <button class="btn chico" data-bquitar aria-label="Quitar">✕</button></div>`;
+}
+/* Panel del edificio: estado de las boletas del mes e impresión de todas */
+async function panelBoletas(){
+  const D = GU.datos; if(!D) return;
+  const act = [...D.registro.values()].filter(g => g.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button><h2>Boletas de pago</h2><div class="sub">${esc(D.ed)} · ${esc(mesTxt(D.mes))}</div><div class="carga" role="status" aria-label="Cargando"></div>`;
+  $('#sheet').classList.add('on');
+  const mk = mesClave(D.mes), est = [];
+  for(const g of act){ let b = null; try{ b = (await leerBoletas(D.ed, g.ci)).find(x => x.mes === mk) || null; }catch(_){} est.push({g, b}); }
+  const listas = est.filter(x => x.b);
+  $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
+    <h2>Boletas de pago</h2><div class="sub">${esc(D.ed)} · ${esc(mesTxt(D.mes))}</div>
+    ${info('Toca un guardia para llenar o corregir su boleta. Se llena sola con los días, turnos dobles, faltas, horas extras y adelantos que registró la app; el sueldo y los montos los pones tú (se recuerdan para el mes siguiente). Se imprime en hoja carta: original arriba y copia abajo, para que el guardia firme las dos.', 'Cómo funciona')}
+    <div class="card">${est.map(x => `<div class="it" data-bol="${esc(x.g.ci)}" style="cursor:pointer"><div class="t"><b>${esc(x.g.nombre)}</b>
+      <small>${esc(TURNO_TXT[x.g.turno] || x.g.turno)}${x.g.bloque ? ' · ' + esc(x.g.bloque) : ''} · ${x.b ? 'Líquido Bs ' + bsN(x.b.liquido) : 'Sin boleta este mes'}</small></div>
+      <span class="pill ${x.b ? 'ok' : ''}">${x.b ? 'Lista' : 'Pendiente'}</span></div>`).join('') || '<div class="empty">Sin guardias activos.</div>'}</div>
+    <div id="bMsg"></div>
+    <button class="btn prim" id="bTodas" style="width:100%;margin-top:10px" ${listas.length ? '' : 'disabled'}>Imprimir todas las boletas listas (${listas.length})</button>`;
+  $('#panel').onclick = async e => {
+    const it = e.target.closest('[data-bol]'); if(it) return formBoleta(it.dataset.bol);
+    if(e.target.closest('#bTodas')) await imprimirBoletas(listas.map(x => x.b), D.ed, `Boletas ${D.ed} ${mesTxt(D.mes)}`, $('#bMsg'));
+  };
+  $('#panel').oninput = null;
+}
+/* PDF: carta vertical, ORIGINAL arriba y COPIA abajo (o una hoja cada una si no entra) */
+async function imprimirBoletas(lista, ed, nombre, msgBox){
+  const msg = (t, cls = '') => { if(msgBox) msgBox.innerHTML = `<div class="msg ${cls}">${t}</div>`; };
+  msg('Armando el PDF…');
+  try{
+    const JsPDF = await cargarJsPDF();
+    const doc = new JsPDF({unit: 'mm', format: 'letter'}), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 14;
+    const gris = [95, 105, 112], linea = [214, 222, 227], tinta = [30, 40, 46];
+    let primera = true;
+    for(const b of lista){
+      const c = calcularBoleta(b), filas = Math.max(c.ing.length, c.des.length);
+      const mitad = filas <= 6;                       /* entra media hoja por copia */
+      const alto = mitad ? H / 2 : H;
+      for(const [k, etiqueta] of [[0, 'ORIGINAL - EMPRESA'], [1, 'COPIA - TRABAJADOR']]){
+        if(!mitad || k === 0){ if(!primera) doc.addPage(); primera = false; }
+        const y0 = mitad ? k * alto : 0;
+        let y = y0 + 8;
+        doc.setFillColor(...COLOR_MARCA); doc.roundedRect(M, y, W - 2 * M, 17, 2, 2, 'F');
+        try{ doc.addImage(LOGO_OSIRIS, 'PNG', M + 3, y + 1.5, 30, 14.1); }catch(_){}
+        doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('BOLETA DE PAGO', W - M - 4, y + 7.5, {align: 'right'});
+        const [yy, mm] = String(b.mes).split('-').map(Number);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(pdfTxt(`${MESES[mm - 1]} de ${yy}  |  ${etiqueta}`), W - M - 4, y + 13, {align: 'right'});
+        y += 22;
+        const dato = (t, v, x, w) => { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gris); doc.text(pdfTxt(t.toUpperCase()), x, y);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...tinta); doc.text(doc.splitTextToSize(pdfTxt(v || '-'), w)[0], x, y + 4.5); };
+        const cw = (W - 2 * M) / 4;
+        dato('Trabajador', b.nombre, M, cw * 2 - 4); dato('CI', b.ci, M + cw * 2, cw - 4); dato('Cargo', b.cargo, M + cw * 3, cw);
+        y += 10;
+        const fp = /^\d{4}-\d{2}-\d{2}$/.test(b.fechaPago || '') ? b.fechaPago.split('-').reverse().join('/') : (b.fechaPago || '');
+        dato('Lugar de trabajo', ed + (b.bloque ? ' - ' + b.bloque : ''), M, cw * 2 - 4); dato('Días trabajados', String(b.dias || '-'), M + cw * 2, cw - 4); dato('Fecha de pago', fp, M + cw * 3, cw);
+        y += 9;
+        const tw = (W - 2 * M - 6) / 2;
+        const tabla = (titulo, filasT, x, total) => doc.autoTable({startY: y, margin: {left: x}, tableWidth: tw, theme: 'grid',
+          head: [[titulo, 'Bs']], body: [...filasT.map(([cc, v]) => [pdfTxt(cc), bsN(v)]), [{content: 'Total', styles: {fontStyle: 'bold'}}, {content: bsN(total), styles: {fontStyle: 'bold'}}]],
+          styles: {font: 'helvetica', fontSize: 8.3, cellPadding: 1.5, lineColor: linea, lineWidth: 0.15, textColor: tinta},
+          headStyles: {fillColor: COLOR_MARCA, textColor: 255, fontStyle: 'bold'}, columnStyles: {1: {halign: 'right', cellWidth: 24}}});
+        tabla('Ingresos', c.ing, M, c.totIng); const y1 = doc.lastAutoTable.finalY;
+        tabla('Descuentos', c.des.length ? c.des : [['Sin descuentos', 0]], M + tw + 6, c.totDes); const y2 = doc.lastAutoTable.finalY;
+        y = Math.max(y1, y2) + 4;
+        doc.setFillColor(239, 243, 245); doc.setDrawColor(...linea); doc.roundedRect(M, y, W - 2 * M, 10, 1.5, 1.5, 'FD');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...COLOR_TITULO);
+        doc.text('LÍQUIDO PAGABLE', M + 4, y + 6.6); doc.text('Bs ' + bsN(c.liquido), W - M - 4, y + 6.6, {align: 'right'});
+        y += 14;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...tinta);
+        doc.text(doc.splitTextToSize(pdfTxt('Son: ' + montoEnLetras(c.liquido)), W - 2 * M)[0], M, y);
+        if(b.obs){ y += 4.5; doc.setTextColor(...gris); doc.text(doc.splitTextToSize(pdfTxt('Obs.: ' + b.obs), W - 2 * M)[0], M, y); }
+        /* firmas */
+        const fy = y0 + alto - 14;
+        doc.setDrawColor(120); doc.setLineWidth(0.3);
+        doc.line(M + 6, fy, M + 76, fy); doc.line(W - M - 76, fy, W - M - 6, fy);
+        try{ const sw = 24, sh = sw / SELLO_TINTA_AR; doc.addImage(SELLO_TINTA, 'PNG', W - M - 66, fy - sh + 1, sw, sh); }catch(_){}
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...tinta);
+        doc.text('Recibí conforme', M + 41, fy + 4, {align: 'center'}); doc.text('OSIRIS Security', W - M - 41, fy + 4, {align: 'center'});
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...gris);
+        doc.text(pdfTxt(`${b.nombre}  -  CI ${b.ci}`), M + 41, fy + 8, {align: 'center'}); doc.text('Entregué conforme', W - M - 41, fy + 8, {align: 'center'});
+        if(mitad && k === 0){ doc.setDrawColor(170); doc.setLineDashPattern([1.5, 1.5], 0); doc.line(6, alto, W - 6, alto); doc.setLineDashPattern([], 0);
+          doc.setFontSize(6.5); doc.setTextColor(150); doc.text('cortar aquí', W / 2, alto - 1, {align: 'center'}); }
+        doc.setLineWidth(0.2);
+      }
+    }
+    const blob = doc.output('blob'), url = URL.createObjectURL(blob), nom = pdfTxt(nombre + '.pdf').replace(/[\\/:*?"<>|]/g, '-');
+    if(msgBox) msgBox.innerHTML = `<div class="msg ok">PDF listo: ${lista.length} boleta${lista.length === 1 ? '' : 's'}.</div>
+      <a class="btn prim" style="display:block;text-align:center;text-decoration:none;margin-top:6px" href="${url}" download="${esc(nom)}" target="_blank" rel="noopener">Abrir / descargar</a>`;
+  }catch(e){ msg('No se pudo armar el PDF (' + esc(e.message) + ').', 'bad'); }
+}
+
 /* Relevo del día 1 siguiente (fin del último turno del mes): cuenta en este mes
    para los dos guardias, aunque el turno del que entra ya sea del mes siguiente. */
 function movsOtroMes(r){
@@ -2102,7 +2379,7 @@ async function detalleGuardia(ci){
   const s = (v, l) => `<div class="stat">${v}<small>${l}</small></div>`;
   $('#panel').innerHTML = `<button class="btn close" id="cerrar">Cerrar</button>
     <h2>${esc(g.nombre)}</h2><div class="sub">ID ${esc(g.ci)} · ${TURNO_TXT[g.turno] || esc(g.turno)}${g.bloque ? ' · ' + esc(g.bloque) : ''} · ${g.activo ? 'Activo' : 'De baja'} · ${esc(mesTxt(D.mes))}</div>
-    <div class="shead" style="margin-top:0"><div class="h2">Horas del mes</div><button class="btn chico" id="gPdf" data-ci="${esc(g.ci)}">${icono('informe', 15)} Descargar PDF</button></div>
+    <div class="shead" style="margin-top:0"><div class="h2">Horas del mes</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn chico" id="gBol">${icono('informe', 15)} Boleta de pago</button><button class="btn chico" id="gPdf" data-ci="${esc(g.ci)}">${icono('informe', 15)} Descargar PDF</button></div></div>
     <div id="gPdfMsg"></div>
     <div class="stats">
       ${s(fmtSaldo(r ? r.saldo : 0), 'Saldo horas extras')}${s(`<b class="${r && Math.round(r.aFavor*60) ? 'pos' : ''}">${esc(Turnos.saldo(r ? r.aFavor : 0))}</b>`, 'A favor')}
@@ -2121,6 +2398,8 @@ async function detalleGuardia(ci){
     </div>
     <div id="gMsg"></div>`;
   $('#sheet').classList.add('on');
+  $('#panel').onclick = null; $('#panel').oninput = null;
+  $('#gBol').onclick = () => formBoleta(g.ci);
   const accion = async (fn, txt) => {
     $('#gMsg').innerHTML = `<div class="msg">${esc(txt)}…</div>`;
     try{ await fn(); $('#sheet').classList.remove('on'); cargarGuardias(); }
@@ -3371,12 +3650,14 @@ const SECC_INF = [
   {k:'turnos', t:'Ingresos y salidas de turno', cols:[['fecha','Fecha'],['hora','Hora'],['mov','Movimiento'],['guardia','Guardia'],['ci','CI'],['bloque','Bloque'],['turno','Turno'],['obs','Observaciones']]},
   {k:'jornadas', t:'Jornadas firmadas', cols:[['fecha','Inicio'],['hora','Hora'],['guardia','Guardia'],['ci','CI'],['bloque','Bloque'],['turno','Turno'],['salida','Salida'],['firma','Firma del guardia']]},
   {k:'rondas', t:'Rondas', cols:[['fecha','Fecha'],['hora','Hora'],['guardia','Guardia'],['bloque','Bloque'],['puntos','Puntos de control'],['fotos','Fotos'],['obs','Observaciones']]},
+  {k:'presencia', t:'Control de presencia', cols:[['fecha','Fecha'],['hora','Sonó'],['guardia','Guardia'],['puesto','Puesto'],['respondio','Respondió'],
+    ['horaResp','Hora de respuesta'],['reaccion','Tiempo de reacción'],['resultado','Resultado'],['selfie','Selfie']]},
   {k:'hosp', t:'Hospedajes', cols:[['fecha','Fecha'],['hora','Hora'],['depto','Depto.'],['huesped','Huésped'],['documento','Documento'],['plataforma','Plataforma'],['noches','Noches'],['huespedes','Huéspedes'],['salida','Salida real'],['registro','Registró']]},
   {k:'horas', t:'Horas del personal', cols:[['guardia','Guardia'],['ci','CI'],['turno','Turno'],['dias','Días'],['n12','12 h'],['n24','24 h'],['n36','36 h'],['horas','Horas trabajadas'],
     ['aFavor','A favor'],['enContra','En contra'],['saldo','Saldo (horas extras)'],['tarde','Llegadas tarde'],['incompletos','Incompletos']]},
 ];
 /* Anchos fijos de columnas cortas (mm); el resto se reparte solo */
-const ANCHOS = {firma:38, n:9, fecha:20, hora:13, salida:22, entregada:22, dias:11, n12:11, n24:11, n36:11, fotos:13, noches:14, turno:16, tarde:17, incompletos:19};
+const ANCHOS = {selfie:20, respondio:20, horaResp:22, reaccion:24, firma:38, n:9, fecha:20, hora:13, salida:22, entregada:22, dias:11, n12:11, n24:11, n36:11, fotos:13, noches:14, turno:16, tarde:17, incompletos:19};
 
 const INF = {url:null, blob:null, nombre:'', abierta:null, pref:null};
 /* Preferencias por edificio (secciones, columnas, papel), guardadas en este celular */
@@ -3581,6 +3862,22 @@ async function generarInforme(){
           firma: s ? (trazosFirma(s.d.firma).length ? ' ' : 'Sin firma') : '', _firma: s ? s.d.firma : null};
       });
     }
+    if(P.secc.presencia){
+      paso('Leyendo el control de presencia…');
+      const RES = {respondida:'A tiempo', tardia:'Respondió tarde', sin:'Sin respuesta', conexion:'Sin respuesta (celular sin conexión)', activa:'Sonando'};
+      const lista = (await presenciaSinRespuesta(ed, desde, hasta)).filter(x => x.est !== 'programada');
+      datos.presencia = lista.map(x => ({fecha: fDia(x.t), hora: fHora(x.t), guardia: x.guardia, puesto: x.puesto,
+        respondio: x.r ? 'Sí' : 'No', horaResp: x.r ? fHora(x.r.cuando) : '', reaccion: x.r ? durCorta(x.r.demora) : '',
+        resultado: RES[x.est] || x.est, selfie: x.r && fotosDe(x.r.d).length ? ' ' : '', _foto: x.r ? fotosDe(x.r.d)[0] : null, _est: x.est}));
+      if(P.ocultas.presencia.includes('selfie')) datos.presencia.forEach(r => r._foto = null);
+      const conFoto = datos.presencia.filter(r => r._foto);
+      if(conFoto.length){
+        paso(`Cargando las selfies (${conFoto.length})…`);
+        let i = 0;
+        const trabajo = async () => { while(i < conFoto.length){ const r = conFoto[i++]; const m = await miniaturaFoto(r._foto); r._mini = m && m.url; r._ar = m ? m.ar : 0.75; if(!r._mini) r.selfie = 'Sin foto'; } };
+        await Promise.all([trabajo(), trabajo(), trabajo(), trabajo(), trabajo()]);
+      }
+    }
     if(P.secc.rondas){
       datos.rondas = de('Ronda').filter(delMes).map(x => ({...base(x), guardia: x.g, bloque: x.d.bloque, puntos: x.d.puntos,
         fotos: x.d.fotos != null ? String(x.d.fotos) : '', obs: x.d.observaciones}));
@@ -3618,7 +3915,7 @@ async function generarInforme(){
     /* Los totales salen de las MISMAS filas que las tablas: nunca pueden no coincidir */
     const resumenItems = [];
     const nT = m => (datos.turnos || []).filter(r => r.mov === m).length;
-    for(const [k, t] of [['visitas','Visitas'],['encom','Encomiendas'],['incid','Incidentes'],['advert','Advertencias'],['rondas','Rondas'],['turnos',''],['hosp','Hospedajes']]){
+    for(const [k, t] of [['visitas','Visitas'],['encom','Encomiendas'],['incid','Incidentes'],['advert','Advertencias'],['rondas','Rondas'],['presencia','Control de presencia'],['turnos',''],['hosp','Hospedajes']]){
       if(!P.secc[k]) continue;
       if(k === 'turnos'){ resumenItems.push(['Ingresos de turno', nT('Ingreso')], ['Salidas de turno', nT('Salida')]); }
       else resumenItems.push([t, (datos[k] || []).length]);
@@ -3642,7 +3939,7 @@ async function generarInforme(){
       if(!P.secc[s.k]) continue;
       const rows = datos[s.k] || [];
       let cols = s.cols.filter(([c]) => !P.ocultas[s.k].includes(c));
-      if(P.vacias && rows.length) cols = cols.filter(([c]) => rows.some(r => String(r[c] ?? '').trim() !== '' || (c === 'firma' && r._firma)));
+      if(P.vacias && rows.length) cols = cols.filter(([c]) => rows.some(r => String(r[c] ?? '').trim() !== '' || (c === 'firma' && r._firma) || (c === 'selfie' && r._mini)));
       if(y > H - 45) nuevaPagina();
       doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.setTextColor(...COLOR_TITULO);
       doc.text(pdfTxt(s.t), M, y);
@@ -3663,6 +3960,12 @@ async function generarInforme(){
         alternateRowStyles:{fillColor: claro},
         columnStyles: estilos,
         didDrawCell: c => {
+          if(c.section === 'body' && s.k === 'presencia' && c.column.dataKey === 'selfie'){
+            const rr = rows[c.row.index] || {}, m = rr._mini; if(!m) return;
+            let h = c.cell.height - 2, w = h * (rr._ar || 0.75); if(w > c.cell.width - 2){ w = c.cell.width - 2; h = w / (rr._ar || 0.75); }
+            try{ doc.addImage(m, 'JPEG', c.cell.x + (c.cell.width - w) / 2, c.cell.y + (c.cell.height - h) / 2, w, h); }catch(_){}
+            return;
+          }
           if(c.section !== 'body' || s.k !== 'jornadas' || c.column.dataKey !== 'firma') return;
           const tr = trazosFirma((rows[c.row.index] || {})._firma); if(!tr.length) return;
           let h = c.cell.height - 2, w = h * FIRMA_AR; if(w > c.cell.width - 3){ w = c.cell.width - 3; h = w / FIRMA_AR; }
@@ -3671,7 +3974,9 @@ async function generarInforme(){
           for(const t of tr) for(let k = 1; k < t.length; k++) doc.line(x0 + t[k - 1][0] / 1000 * w, y0 + t[k - 1][1] / 1000 * h, x0 + t[k][0] / 1000 * w, y0 + t[k][1] / 1000 * h);
           doc.setLineWidth(0.2); doc.setDrawColor(...linea);
         },
-        didParseCell: c => { if(c.section === 'body' && s.k === 'jornadas' && c.column.dataKey === 'firma'){ c.cell.styles.minCellHeight = 16; if(c.cell.raw === 'Sin firma'){ c.cell.styles.textColor = [150, 40, 40]; } } if(c.section === 'body' && s.k === 'visitas' && c.column.dataKey === 'devolvio' && c.cell.raw === 'NO'){ c.cell.styles.textColor = [200, 30, 30]; c.cell.styles.fontStyle = 'bold'; } },
+        didParseCell: c => { if(c.section === 'body' && s.k === 'presencia'){ if(c.column.dataKey === 'selfie' && (rows[c.row.index] || {})._mini) c.cell.styles.minCellHeight = 18;
+            if(c.column.dataKey === 'respondio' || c.column.dataKey === 'resultado'){ const e = (rows[c.row.index] || {})._est; if(e === 'sin' || e === 'conexion'){ c.cell.styles.textColor = [200, 30, 30]; c.cell.styles.fontStyle = 'bold'; } else if(e === 'tardia') c.cell.styles.textColor = [180, 110, 0]; } }
+          if(c.section === 'body' && s.k === 'jornadas' && c.column.dataKey === 'firma'){ c.cell.styles.minCellHeight = 16; if(c.cell.raw === 'Sin firma'){ c.cell.styles.textColor = [150, 40, 40]; } } if(c.section === 'body' && s.k === 'visitas' && c.column.dataKey === 'devolvio' && c.cell.raw === 'NO'){ c.cell.styles.textColor = [200, 30, 30]; c.cell.styles.fontStyle = 'bold'; } },
       });
       y = doc.lastAutoTable.finalY + 11;
       if(s.k === 'horas' && cfg) notas.push(cfg.unGuardia ? `Edificio de un solo guardia: las horas extras se cuentan contra su propio horario de relevo (quedarse después suma; llegar tarde o irse antes resta). Turno de 36 h: cuenta como día extra trabajado. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.` : `Horas extras solo entre los guardias fijos (diurno y nocturno), en espejo: lo que uno tiene a favor el otro lo tiene en contra (solo cuando el relevo llega tarde; llegar antes no suma: vale la hora configurada). Los franqueros no suman ni restan. Turno de 24 h: sale a la misma hora del día siguiente; turno de 36 h: cuenta como día extra trabajado, no como horas extras. El mes empieza con el diurno del día 1 y termina con el nocturno del último día. Tolerancia ${cfg.tolerancia} min: pasado el margen se cuentan los minutos completos.`);
@@ -3715,6 +4020,8 @@ async function generarInforme(){
       if(datos.turnos){ const ing = datos.turnos.filter(r => r.mov === 'Ingreso').length, sal = datos.turnos.filter(r => r.mov === 'Salida').length;
         cifras.push(['Turnos de guardia cubiertos', String(ing), `${sal} salidas de turno registradas`]); }
       if(datos.hosp && datos.hosp.length) cifras.push(['Hospedajes registrados', String(datos.hosp.length), '']);
+      if(datos.presencia){ const P2 = k => datos.presencia.filter(r => r._est === k).length, sinR = P2('sin') + P2('conexion');
+        cifras.push(['Controles de presencia', String(datos.presencia.length), datos.presencia.length ? `${P2('respondida')} a tiempo, ${P2('tardia')} tarde, ${sinR} sin respuesta` : 'no hubo controles en el mes']); }
       if(datos.advert) cifras.push(['Observaciones al personal', String(datos.advert.length), datos.advert.length ? 'ver detalle' : 'ninguna']);
       if(cifras.length){
         doc.autoTable({startY: cy, margin: {left: mx, right: mx}, theme: 'grid',
