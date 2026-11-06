@@ -3897,10 +3897,19 @@ async function generarInforme(){
     }
     if(P.secc.encom){
       const ent = de('Encomienda');
-      emparejar(ent, de('Entrega de encomienda'), d => normal(d.depto) + '|' + normal(d.destinatario));
+      /* entregas hasta HOY (una encomienda de fin de mes se puede entregar semanas después) */
+      let entregas = de('Entrega de encomienda');
+      try{
+        const mas = await paginas('eventos?select=*&edificio=eq.' + enc(ed) + '&tipo=eq.' + enc('Entrega de encomienda') + '&created_at=gte.' + enc(hastaQ.toISOString()) + '&order=created_at.asc,id.asc');
+        const ya = new Set(entregas.map(x => x.d.uid || x.e.id));
+        for(const e of mas){ const d = detalleDe(e); if(!ya.has(d.uid || e.id)) entregas.push({e, d, t: horaReal(e), g: e.guardia || ''}); }
+      }catch(_){}
+      emparejar(ent, entregas, d => normal(d.depto) + '|' + normal(d.destinatario));
       const hayEntregas = ent.some(x => x.salida);
+      /* Las encomiendas registradas con la app anterior al 9/10 (sin "ref") no avisaban la entrega a la nube:
+         si no aparece su entrega, no se sabe si se entregó -> "Sin registro", no "Pendiente". */
       datos.encom = ent.filter(delMes).map(x => ({...base(x), depto: x.d.depto, dest: x.d.destinatario, empresa: x.d.empresa, recibio: x.g,
-        entregada: x.salida ? fDiaHora(x.salida.t) : (hayEntregas ? 'Pendiente' : ''), entrego: x.salida ? x.salida.g : ''}));
+        entregada: x.salida ? fDiaHora(x.salida.t) : (!hayEntregas ? '' : (x.d.ref ? 'Pendiente' : 'Sin registro')), entrego: x.salida ? x.salida.g : ''}));
     }
     const TIPO_ADV = {tarde:'Ingreso tarde', tarjeta:'Tarjeta no devuelta', tarjeta_turno:'Tarjetas sin devolver', uniforme:'Sin uniforme'};
     if(P.secc.incid){
@@ -4083,8 +4092,9 @@ async function generarInforme(){
       if(datos.rondas) cifras.push(['Rondas de control realizadas', String(datos.rondas.length), `promedio de ${(datos.rondas.length / diasCont).toFixed(1).replace('.', ',')} por día`]);
       if(datos.visitas){ const sinDev = datos.visitas.filter(r => r.devolvio === 'NO').length;
         cifras.push(['Visitas registradas', String(datos.visitas.length), sinDev ? `${sinDev} sin devolver tarjeta` : 'con nombre, CI y depto. de destino']); }
-      if(datos.encom){ const pend = datos.encom.filter(r => r.entregada === 'Pendiente').length;
-        cifras.push(['Encomiendas recibidas', String(datos.encom.length), pend ? `${pend} pendiente${pend === 1 ? '' : 's'} de entrega` : 'todas registradas']); }
+      if(datos.encom){ const pend = datos.encom.filter(r => r.entregada === 'Pendiente').length, sinReg = datos.encom.filter(r => r.entregada === 'Sin registro').length;
+        cifras.push(['Encomiendas recibidas', String(datos.encom.length), [pend ? `${pend} pendiente${pend === 1 ? '' : 's'} de entrega` : (sinReg ? '' : 'todas entregadas'),
+          sinReg ? `${sinReg} sin registro de entrega (antes del 9/10)` : ''].filter(Boolean).join('; ')]); }
       if(datos.incid) cifras.push(['Incidentes reportados', String(datos.incid.length), datos.incid.length ? 'detalle abajo' : 'sin novedades']);
       if(datos.turnos){ const ing = datos.turnos.filter(r => r.mov === 'Ingreso').length, sal = datos.turnos.filter(r => r.mov === 'Salida').length;
         cifras.push(['Turnos de guardia cubiertos', String(ing), `${sal} salidas de turno registradas`]); }
